@@ -1,15 +1,18 @@
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $Host.UI.RawUI.WindowTitle = "iWani - Push to GitHub Automation"
 
+Clear-Host
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host "            iWANI (Project Nexus) - GitHub Automation Tool           " -ForegroundColor Cyan
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 1. Check Git
+Set-Location -Path $PSScriptRoot
+
+# 1. Verify Git Installation
 $gitCmd = Get-Command git -ErrorAction SilentlyContinue
 if (-not $gitCmd) {
-    Write-Host "[ERROR] Git is not installed or not in your PATH." -ForegroundColor Red
+    Write-Host "[ERROR] Git is not installed or not in your system PATH." -ForegroundColor Red
     Write-Host "Please download and install Git from: https://git-scm.com/" -ForegroundColor Yellow
     Write-Host ""
     Read-Host "Press Enter to exit"
@@ -20,12 +23,19 @@ $gitVer = git --version
 Write-Host "[OK] Git is ready: $gitVer" -ForegroundColor Green
 Write-Host ""
 
+# Ensure Git Author Identity is set
+$authorName = git config user.name
+if (-not $authorName) {
+    git config --global user.name "Project Nexus"
+    git config --global user.email "nexus@icct.edu.ph"
+}
+
 # 2. Prompt for Repo URL
 $defaultUrl = "https://github.com/S1mplee67/iWani.git"
 Write-Host "----------------------------------------------------------------------" -ForegroundColor Gray
-Write-Host "Default repository: $defaultUrl" -ForegroundColor Yellow
+Write-Host "Default repository : $defaultUrl" -ForegroundColor Yellow
 Write-Host "----------------------------------------------------------------------" -ForegroundColor Gray
-Write-Host "Press ENTER to use default, or type repo name (e.g. iWani) or full URL:" -ForegroundColor White
+Write-Host "Press ENTER to use default, or type a custom repo name / URL:" -ForegroundColor White
 $userInput = Read-Host "Repository"
 
 $repoUrl = $defaultUrl
@@ -41,25 +51,21 @@ if ($userInput -and $userInput.Trim() -ne "") {
 
 Write-Host ""
 Write-Host "======================================================================" -ForegroundColor Cyan
-Write-Host "Target Repository : $repoUrl" -ForegroundColor Green
+Write-Host "Target Repository  : $repoUrl" -ForegroundColor Green
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-Set-Location -Path $PSScriptRoot
-
-# 3. Initialize Git
+# 3. Initialize Git if needed
 if (-not (Test-Path ".git")) {
     Write-Host "[*] Initializing Git repository..." -ForegroundColor White
     git init
-} else {
-    Write-Host "[*] Existing Git repository detected." -ForegroundColor White
 }
 
 # 4. Set branch to main
 git branch -M main
 
 # 5. Remote Origin
-Write-Host "[*] Configuring remote origin to $repoUrl..." -ForegroundColor White
+Write-Host "[*] Setting remote origin to $repoUrl..." -ForegroundColor White
 git remote remove origin 2>$null
 git remote add origin $repoUrl
 
@@ -68,8 +74,13 @@ Write-Host "[*] Staging files (source code, models, and iWani-debug.apk)..." -Fo
 git add .
 
 # 7. Commit
-Write-Host "[*] Creating commit..." -ForegroundColor White
-git commit -m "feat: iWani Project Nexus Alpha Release - FSL Translation & Emergency SOS" 2>$null
+$status = git status --porcelain
+if ($status) {
+    Write-Host "[*] Creating commit..." -ForegroundColor White
+    git commit -m "feat: iWani Project Nexus Alpha Release - FSL Translation & Emergency SOS"
+} else {
+    Write-Host "[*] Commit is up to date." -ForegroundColor Green
+}
 
 # 8. Push
 function Do-Push {
@@ -95,9 +106,9 @@ function Do-Push {
     } else {
         Write-Host ""
         Write-Host "======================================================================" -ForegroundColor Red
-        Write-Host " [NOTICE] Push could not complete automatically." -ForegroundColor Red
+        Write-Host " [NOTICE] Push could not complete." -ForegroundColor Red
         Write-Host " Common causes:" -ForegroundColor Yellow
-        Write-Host " 1. The repository '$repoUrl' was not created on GitHub yet." -ForegroundColor White
+        Write-Host " 1. The repository '$repoUrl' has NOT been created on GitHub yet." -ForegroundColor White
         Write-Host "    -> Go to https://github.com/new and create it first!" -ForegroundColor Yellow
         Write-Host " 2. GitHub sign-in was cancelled or credentials failed." -ForegroundColor White
         Write-Host " 3. Check your internet connection." -ForegroundColor White
