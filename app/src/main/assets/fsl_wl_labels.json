@@ -1,0 +1,44 @@
+{
+  "label_to_index": {
+    "salamat": 0,
+    "tulong": 1,
+    "ospital": 2,
+    "pulis": 3,
+    "sunog": 4,
+    "kain": 5,
+    "tubig": 6,
+    "magandang_umaga": 7,
+    "kumusta": 8,
+    "paalam": 9
+  },
+  "index_to_label": {
+    "0": "salamat",
+    "1": "tulong",
+    "2": "ospital",
+    "3": "pulis",
+    "4": "sunog",
+    "5": "kain",
+    "6": "tubig",
+    "7": "magandang_umaga",
+    "8": "kumusta",
+    "9": "paalam"
+  },
+  "num_classes": 10,
+  "labels": [
+    "salamat",
+    "tulong",
+    "ospital",
+    "pulis",
+    "sunog",
+    "kain",
+    "tubig",
+    "magandang_umaga",
+    "kumusta",
+    "paalam"
+  ],
+  "feature_dim": 100,
+  "sequence_len": 30,
+  "dataset": "WL-FSL",
+  "normalization": "nose-centered + per-sequence std",
+  "temporal_total": 300
+}

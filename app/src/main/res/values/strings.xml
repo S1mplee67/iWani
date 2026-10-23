@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">iWani</string>
+    <string name="tagline">Pagsasalin ng Filipino Sign Language</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_camera">Kamera</string>
+    <string name="nav_emergency">SOS</string>
+    <string name="nav_translate">Salin</string>
+    <string name="greeting_morning">Magandang Umaga</string>
+    <string name="greeting_afternoon">Magandang Hapon</string>
+    <string name="greeting_evening">Magandang Gabi</string>
+    <string name="sos_header">Pang-emerhensiya / SOS</string>
+    <string name="camera_permission_required">Kinakailangan ang pahintulot sa camera upang makilala ang mga senyas ng FSL.</string>
+</resources>

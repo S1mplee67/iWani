@@ -1,0 +1,36 @@
+# Android & Gradle Build Artifacts
+**/build/
+**/.gradle/
+*.iml
+.idea/
+local.properties
+.gradle/
+build/
+app/build/
+iwani_kotlin/app/build/
+iwani_kotlin/.gradle/
+
+# Output binaries (keep repository lean while tracking the release alpha build)
+*.aab
+*.ap_
+*.apk
+!release/iWani-debug.apk
+
+# OS & IDE metadata
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+*.tmp
+.vscode/
+
+# Python & ML Training cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Exported distribution archives
+iWANI repo.zip
+iWANI repo/
