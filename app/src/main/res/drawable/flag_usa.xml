@@ -1,0 +1,26 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="16dp"
+    android:viewportWidth="24"
+    android:viewportHeight="16">
+    <!-- Red Background -->
+    <path
+        android:fillColor="#B22234"
+        android:pathData="M0,0 h24 v16 h-24 Z"/>
+    <!-- 6 White Stripes -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,1.23 h24 v1.23 h-24 Z M0,3.69 h24 v1.23 h-24 Z M0,6.15 h24 v1.23 h-24 Z M0,8.61 h24 v1.23 h-24 Z M0,11.07 h24 v1.23 h-24 Z M0,13.53 h24 v1.23 h-24 Z"/>
+    <!-- Blue Canton (Union) -->
+    <path
+        android:fillColor="#3C3B6E"
+        android:pathData="M0,0 h10.5 v8.61 h-10.5 Z"/>
+    <!-- Star pattern on Canton -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M1.8,1.4 a0.55,0.55 0 1,0 0.01,0 Z M5.2,1.4 a0.55,0.55 0 1,0 0.01,0 Z M8.6,1.4 a0.55,0.55 0 1,0 0.01,0 Z
+                          M3.5,2.8 a0.55,0.55 0 1,0 0.01,0 Z M6.9,2.8 a0.55,0.55 0 1,0 0.01,0 Z
+                          M1.8,4.3 a0.55,0.55 0 1,0 0.01,0 Z M5.2,4.3 a0.55,0.55 0 1,0 0.01,0 Z M8.6,4.3 a0.55,0.55 0 1,0 0.01,0 Z
+                          M3.5,5.7 a0.55,0.55 0 1,0 0.01,0 Z M6.9,5.7 a0.55,0.55 0 1,0 0.01,0 Z
+                          M1.8,7.2 a0.55,0.55 0 1,0 0.01,0 Z M5.2,7.2 a0.55,0.55 0 1,0 0.01,0 Z M8.6,7.2 a0.55,0.55 0 1,0 0.01,0 Z"/>
+</vector>

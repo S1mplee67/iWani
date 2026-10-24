@@ -125,13 +125,35 @@ fun AboutScreen(
                         modifier = Modifier.padding(22.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.logo_iwani),
-                            contentDescription = "iWani Logo",
-                            modifier = Modifier
-                                .size(76.dp)
-                                .clip(RoundedCornerShape(18.dp))
-                        )
+                        // Institutional Logos Trio: ICCT Seal, iWani Nexus, ICCT Engineering 1992
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.icct_seal),
+                                contentDescription = "ICCT Seal",
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(CircleShape)
+                            )
+                            Spacer(Modifier.width(14.dp))
+                            Image(
+                                painter = painterResource(id = R.drawable.logo_iwani),
+                                contentDescription = "iWani Logo",
+                                modifier = Modifier
+                                    .size(68.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                            )
+                            Spacer(Modifier.width(14.dp))
+                            Image(
+                                painter = painterResource(id = R.drawable.icct_engineering_1992),
+                                contentDescription = "ICCT Engineering 1992",
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(CircleShape)
+                            )
+                        }
 
                         Spacer(Modifier.height(14.dp))
 
