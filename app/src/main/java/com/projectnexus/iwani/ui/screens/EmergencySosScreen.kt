@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.sp
 import com.projectnexus.iwani.AppLanguage
 import com.projectnexus.iwani.emergency.EmergencyPhrase
 import com.projectnexus.iwani.emergency.EmergencySosManager
+import com.projectnexus.iwani.ui.components.VoiceGlowBar
+import com.projectnexus.iwani.ui.components.interactiveBounceClick
 import com.projectnexus.iwani.ui.theme.*
 
 @Composable
@@ -81,7 +83,7 @@ fun EmergencySosScreen(
             }
         }
 
-        // Active Speaking Banner
+        // Active Speaking Banner with VoiceGlowBar (Libraries.dev `voice-glow`)
         if (activeSpeakingUtterance != null) {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -91,17 +93,22 @@ fun EmergencySosScreen(
                     .padding(bottom = 14.dp)
                     .border(1.5.dp, EmergencyRed, RoundedCornerShape(16.dp))
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.VolumeUp, contentDescription = null, tint = Color.White)
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = (if (isTagalog) "Ipinapahayag: " else "Broadcasting: ") + "\"$activeSpeakingUtterance\"",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.VolumeUp, contentDescription = null, tint = Color.White)
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = (if (isTagalog) "Ipinapahayag: " else "Broadcasting: ") + "\"$activeSpeakingUtterance\"",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    VoiceGlowBar(
+                        active = true,
+                        primaryColor = EmergencyRed,
+                        secondaryColor = IcctGold
                     )
                 }
             }
@@ -162,7 +169,7 @@ fun EmergencyPhraseCard(
                 if (isActive) EmergencyRed else cardBorder,
                 RoundedCornerShape(16.dp)
             )
-            .clickable { onClick() }
+            .interactiveBounceClick { onClick() }
     ) {
         Row(
             modifier = Modifier.padding(18.dp),

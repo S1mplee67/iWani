@@ -6,27 +6,20 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Campaign
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Forum
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -38,6 +31,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.projectnexus.iwani.AppLanguage
 import com.projectnexus.iwani.R
+import com.projectnexus.iwani.ui.components.*
 import com.projectnexus.iwani.ui.theme.*
 import kotlinx.coroutines.delay
 import java.util.Calendar
@@ -50,7 +44,6 @@ data class HeroSlide(
     val descTl: String
 )
 
-@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun HomeScreen(
     appLanguage: AppLanguage = AppLanguage.ENGLISH,
@@ -112,7 +105,7 @@ fun HomeScreen(
                 drawableRes = R.drawable.slide_emergency,
                 titleEn = "Barangay & Public Service",
                 titleTl = "Serbisyo sa Pamayanan",
-                descEn = "Assisting barangay officers and citizens during urgent public inquiries.",
+                descEn = "Assisting barangay officers and citizens during urgent inquiries.",
                 descTl = "Pagtulong sa mga opisyal ng barangay at mamamayan sa oras ng saklolo."
             ),
             HeroSlide(
@@ -135,11 +128,10 @@ fun HomeScreen(
     var currentSlideIndex by remember { mutableIntStateOf(0) }
     var isUserInteracting by remember { mutableStateOf(false) }
 
-    // Auto-advancing slideshow timer (advances every 4 seconds)
     LaunchedEffect(isUserInteracting) {
         if (!isUserInteracting) {
             while (true) {
-                delay(4000)
+                delay(4200)
                 currentSlideIndex = (currentSlideIndex + 1) % slides.size
             }
         }
@@ -152,155 +144,133 @@ fun HomeScreen(
             .fillMaxSize()
             .background(bg)
             .padding(horizontal = 20.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
-        // Greeting Header
-        Text(
-            text = if (isTagalog) "Kamusta, $greeting!" else "Welcome, $greeting!",
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Bold,
-            color = textPrimary
-        )
-        Text(
-            text = if (isTagalog) "Pagsasalin ng Filipino Sign Language sa Boses" else "Filipino Sign Language Translation & Voice Assistance",
-            fontSize = 13.sp,
-            color = textSecondary,
-            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
-        )
+        // ================= 1. MINIMALIST EDITORIAL HEADER =================
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = greeting,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Black,
+                    color = textPrimary
+                )
+                Text(
+                    text = if (isTagalog)
+                        "Filipino Sign Language • Project Nexus"
+                    else
+                        "Filipino Sign Language • Project Nexus",
+                    fontSize = 12.sp,
+                    color = textSecondary
+                )
+            }
 
-        // 6-Photo Slideshow Hero Card
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = surface),
+            MetalBadge(
+                text = "PROJECT NEXUS",
+                isDark = isDarkTheme,
+                modifier = Modifier.interactiveBounceClick { onNavigateToAbout() }
+            )
+        }
+
+        // ================= 2. SLEEK EDGE-TO-EDGE HERO CAROUSEL =================
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, border, RoundedCornerShape(20.dp))
+                .height(188.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .border(1.dp, border, RoundedCornerShape(24.dp))
+                .interactiveBounceClick {
+                    isUserInteracting = true
+                    currentSlideIndex = (currentSlideIndex + 1) % slides.size
+                }
         ) {
-            Column {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(175.dp)
-                        .clickable {
-                            isUserInteracting = true
-                            currentSlideIndex = (currentSlideIndex + 1) % slides.size
-                        }
+            AnimatedContent(
+                targetState = currentSlideIndex,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(480)) togetherWith fadeOut(animationSpec = tween(480))
+                },
+                label = "SlideTransition"
+            ) { targetIndex ->
+                val slide = slides[targetIndex]
+                Image(
+                    painter = painterResource(id = slide.drawableRes),
+                    contentDescription = slide.titleEn,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+
+            // Smooth dark gradient scrim for readable overlay text
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.25f),
+                                Color.Black.copy(alpha = 0.82f)
+                            )
+                        )
+                    )
+            )
+
+            // Bottom Overlay Caption + Minimalist Indicator Dots
+            val currentSlide = slides[currentSlideIndex]
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
                 ) {
-                    AnimatedContent(
-                        targetState = currentSlideIndex,
-                        transitionSpec = {
-                            fadeIn(animationSpec = tween(500)) togetherWith fadeOut(animationSpec = tween(500))
-                        },
-                        label = "SlideTransition"
-                    ) { targetIndex ->
-                        val slide = slides[targetIndex]
-                        Image(
-                            painter = painterResource(id = slide.drawableRes),
-                            contentDescription = slide.titleEn,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(175.dp)
-                                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)),
-                            contentScale = ContentScale.Crop
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isTagalog) currentSlide.titleTl else currentSlide.titleEn,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = Color(0xFFFDE68A)
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = if (isTagalog) currentSlide.descTl else currentSlide.descEn,
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.88f),
+                            lineHeight = 15.sp,
+                            maxLines = 2
                         )
                     }
 
-                    // Previous / Next Subtle Touch Controls
+                    Spacer(Modifier.width(10.dp))
+
+                    // Minimalist Pill Dots
                     Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.45f),
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clickable {
-                                    isUserInteracting = true
-                                    currentSlideIndex = if (currentSlideIndex == 0) slides.size - 1 else currentSlideIndex - 1
-                                }
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.ChevronLeft,
-                                    contentDescription = "Previous Slide",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.45f),
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clickable {
-                                    isUserInteracting = true
-                                    currentSlideIndex = (currentSlideIndex + 1) % slides.size
-                                }
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.ChevronRight,
-                                    contentDescription = "Next Slide",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Slide Caption & Indicator Dots
-                val currentSlide = slides[currentSlideIndex]
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
-                ) {
-                    Text(
-                        text = if (isTagalog) currentSlide.titleTl else currentSlide.titleEn,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = accent
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = if (isTagalog) currentSlide.descTl else currentSlide.descEn,
-                        fontSize = 12.sp,
-                        color = textSecondary,
-                        lineHeight = 16.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Indicator Dots (● ○ ○ ○ ○ ○)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         slides.indices.forEach { index ->
                             val isSelected = index == currentSlideIndex
                             Box(
                                 modifier = Modifier
-                                    .padding(horizontal = 3.dp)
                                     .size(
-                                        width = if (isSelected) 18.dp else 6.dp,
-                                        height = 6.dp
+                                        width = if (isSelected) 16.dp else 5.dp,
+                                        height = 5.dp
                                     )
                                     .background(
-                                        color = if (isSelected) accent else textSecondary.copy(alpha = 0.35f),
+                                        color = if (isSelected) IcctGold else Color.White.copy(alpha = 0.4f),
                                         shape = RoundedCornerShape(3.dp)
                                     )
-                                    .clickable {
-                                        isUserInteracting = true
-                                        currentSlideIndex = index
-                                    }
                             )
                         }
                     }
@@ -308,232 +278,172 @@ fun HomeScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        // ================= 3. MINIMALIST 2x2 BENTO GRID (UNCROWDED & INTERACTIVE) =================
+        Text(
+            text = if (isTagalog) "MGA PANGUNAHING FEATURE" else "CORE WORKSPACE",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 1.5.sp,
+            color = textSecondary
+        )
 
-        // Emergency SOS Quick Banner
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = if (isDarkTheme) EmergencyRedDark.copy(alpha = 0.35f) else Color(0xFFFEE2E2)
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    1.dp,
-                    if (isDarkTheme) EmergencyRed.copy(alpha = 0.5f) else Color(0xFFFCA5A5),
-                    RoundedCornerShape(20.dp)
+        // Row 1: FSL Camera (with BorderBeam highlight) + AI Translate
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Tile 1: FSL Camera Recognition (Wrapped in Libraries.dev BorderBeamBox)
+            BorderBeamBox(
+                active = true,
+                cornerRadius = 22.dp,
+                beamColor = primary,
+                secondaryColor = accent,
+                baseBorderColor = border,
+                backgroundColor = surface,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(152.dp)
+                    .interactiveBounceClick { onNavigateToCamera() }
+            ) {
+                BentoTileContent(
+                    icon = Icons.Default.Videocam,
+                    badge = "97.4% AI",
+                    title = if (isTagalog) "FSL Kamera" else "FSL Camera",
+                    subtitle = if (isTagalog) "Live 26-titik 3D hand tracking" else "Live 26-letter 3D hand vision",
+                    accentColor = primary,
+                    textPrimary = textPrimary,
+                    textSecondary = textSecondary
                 )
-                .clickable { onNavigateToEmergency() }
-        ) {
-            Row(
-                modifier = Modifier.padding(18.dp),
-                verticalAlignment = Alignment.CenterVertically
+            }
+
+            // Tile 2: Communication & Translation
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = surface,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(152.dp)
+                    .border(1.dp, border, RoundedCornerShape(22.dp))
+                    .interactiveBounceClick { onNavigateToTranslate() }
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .background(EmergencyRed.copy(alpha = 0.25f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Campaign,
-                        contentDescription = "SOS",
-                        tint = EmergencyRed,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Text(
-                        text = if (isTagalog) "Emergency SOS (Saklolo)" else "Emergency SOS",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        color = if (isDarkTheme) Color(0xFFFCA5A5) else Color(0xFF991B1B)
-                    )
-                    Text(
-                        text = if (isTagalog) "1-tap agarang boses para sa tulong" else "1-tap loud voice broadcast for immediate assistance",
-                        fontSize = 12.sp,
-                        color = textSecondary
-                    )
-                }
+                BentoTileContent(
+                    icon = Icons.Default.Forum,
+                    badge = "QWEN 2.5",
+                    title = if (isTagalog) "Pagsasalin" else "Translate",
+                    subtitle = if (isTagalog) "Senyas patungong buong boses" else "Sign glosses to spoken voice",
+                    accentColor = accent,
+                    textPrimary = textPrimary,
+                    textSecondary = textSecondary
+                )
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        // Row 2: Emergency SOS + 26-Letter FSL Reference Chart
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Tile 3: Emergency SOS
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = if (isDarkTheme) EmergencyRedDark.copy(alpha = 0.28f) else Color(0xFFFEE2E2),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(146.dp)
+                    .border(
+                        1.dp,
+                        if (isDarkTheme) EmergencyRed.copy(alpha = 0.45f) else Color(0xFFFCA5A5),
+                        RoundedCornerShape(22.dp)
+                    )
+                    .interactiveBounceClick { onNavigateToEmergency() }
+            ) {
+                BentoTileContent(
+                    icon = Icons.Default.Campaign,
+                    badge = "1-TAP SOS",
+                    title = if (isTagalog) "Saklolo SOS" else "Emergency SOS",
+                    subtitle = if (isTagalog) "Agarang malakas na boses" else "Instant loud voice broadcast",
+                    accentColor = EmergencyRed,
+                    textPrimary = if (isDarkTheme) Color(0xFFFCA5A5) else Color(0xFF991B1B),
+                    textSecondary = textSecondary
+                )
+            }
 
-        // FSL Camera Recognition Card
-        ModeCard(
-            title = if (isTagalog) "Pagsasanay sa FSL (Kamera)" else "FSL Camera Recognition",
-            subtitle = if (isTagalog) "Kilalanin ang 26 titik ng alpabeto gamit ang camera" else "Recognize 26 alphabet letters live with camera",
-            icon = Icons.Default.School,
-            accentColor = primary,
-            isDarkTheme = isDarkTheme,
-            onClick = onNavigateToCamera
-        )
+            // Tile 4: 26-Letter FSL Chart Modal
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = surface,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(146.dp)
+                    .border(1.dp, border, RoundedCornerShape(22.dp))
+                    .interactiveBounceClick { showChartDialog = true }
+            ) {
+                BentoTileContent(
+                    icon = Icons.AutoMirrored.Filled.MenuBook,
+                    badge = "A – Z GUIDE",
+                    title = if (isTagalog) "FSL Tsart" else "FSL Alphabet",
+                    subtitle = if (isTagalog) "Gabay sa 26 posisyon ng kamay" else "Visual guide for 26 hand signs",
+                    accentColor = SuccessGreen,
+                    textPrimary = textPrimary,
+                    textSecondary = textSecondary
+                )
+            }
+        }
 
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // FSL Communication & Translation Card
-        ModeCard(
-            title = if (isTagalog) "Komunikasyon & Pagsasalin" else "Communication & Translation",
-            subtitle = if (isTagalog) "Gawing natural na pangungusap ang mga senyas" else "Turn sign glosses into fluent spoken sentences",
-            icon = Icons.Default.Forum,
-            accentColor = accent,
-            isDarkTheme = isDarkTheme,
-            onClick = onNavigateToTranslate
-        )
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // FSL 26-Letter Reference Chart Button
-        Card(
+        // ================= 4. MINIMALIST AI ENGINE STATUS PILL (WITH THINKING ORB) =================
+        Surface(
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = surface),
+            color = surface,
             modifier = Modifier
                 .fillMaxWidth()
                 .border(1.dp, border, RoundedCornerShape(20.dp))
-                .clickable { showChartDialog = true }
+                .interactiveBounceClick { onNavigateToModelManager() }
         ) {
             Row(
-                modifier = Modifier.padding(18.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .background(accent.copy(alpha = 0.15f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MenuBook,
-                        contentDescription = "Alphabet Chart",
-                        tint = accent,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(16.dp))
+                ThinkingOrb(
+                    size = 32.dp,
+                    state = "breathing",
+                    primaryColor = primary,
+                    accentColor = accent
+                )
+                Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isTagalog) "Tingnan ang 26-Titik FSL Tsart" else "View 26-Letter FSL Chart",
+                        text = if (isTagalog) "On-Device AI Model (Qwen 2.5)" else "On-Device AI Engine (Qwen 2.5)",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         color = textPrimary
                     )
                     Text(
-                        text = if (isTagalog) "Gabay sa tamang posisyon ng kamay para sa A-Z" else "Visual reference guide for letters A to Z",
-                        fontSize = 12.sp,
+                        text = if (isTagalog)
+                            "I-extract at pamahalaan ang 350 MB offline neural model"
+                        else
+                            "Extract & manage 350 MB offline neural weights",
+                        fontSize = 11.sp,
                         color = textSecondary
                     )
                 }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // Model AI Lokal (On-Device AI Manager)
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = surface),
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, border, RoundedCornerShape(20.dp))
-                .clickable { onNavigateToModelManager() }
-        ) {
-            Row(
-                modifier = Modifier.padding(18.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .background(accent.copy(alpha = 0.15f), CircleShape),
-                    contentAlignment = Alignment.Center
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = primary.copy(alpha = 0.16f)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Psychology,
-                        contentDescription = "Model AI",
-                        tint = accent,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = if (isTagalog) "Model AI Lokal" else "On-Device AI Models",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            color = textPrimary
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = SuccessGreen.copy(alpha = 0.18f)
-                        ) {
-                            Text(
-                                text = "Qwen 2.5",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = SuccessGreen,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
                     Text(
-                        text = if (isTagalog) "Pamahalaan ang offline neural AI models (~350 MB)" else "Download and manage offline neural AI models (~350 MB)",
-                        fontSize = 12.sp,
-                        color = textSecondary
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // About Project Nexus Card
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = surface),
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, border, RoundedCornerShape(20.dp))
-                .clickable { onNavigateToAbout() }
-        ) {
-            Row(
-                modifier = Modifier.padding(18.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .background(primary.copy(alpha = 0.15f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "About",
-                        tint = primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (isTagalog) "Tungkol sa Project Nexus" else "About Project Nexus & Team",
+                        text = if (isTagalog) "Buksan ›" else "Manage ›",
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = textPrimary
-                    )
-                    Text(
-                        text = "Computer Engineering • A.Y. 2026–2027",
-                        fontSize = 12.sp,
-                        color = textSecondary
+                        color = primary,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(20.dp))
     }
 
     // Full FSL Alphabet Chart Dialog
@@ -546,7 +456,7 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(24.dp),
                 color = bg,
                 border = BorderStroke(1.dp, border)
             ) {
@@ -559,7 +469,7 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "FSL Alphabet Chart (A-Z)",
+                            text = "FSL Alphabet Chart (A–Z)",
                             color = accent,
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
@@ -572,7 +482,7 @@ fun HomeScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                            .padding(8.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Image(
@@ -589,59 +499,70 @@ fun HomeScreen(
 }
 
 @Composable
-fun ModeCard(
+private fun BentoTileContent(
+    icon: ImageVector,
+    badge: String,
     title: String,
     subtitle: String,
-    icon: ImageVector,
     accentColor: Color,
-    isDarkTheme: Boolean = true,
-    onClick: () -> Unit
+    textPrimary: Color,
+    textSecondary: Color
 ) {
-    val surface = IWaniColors.surface(isDarkTheme)
-    val border = IWaniColors.border(isDarkTheme)
-    val textPrimary = IWaniColors.textPrimary(isDarkTheme)
-    val textSecondary = IWaniColors.textSecondary(isDarkTheme)
-
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = surface),
+    Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, border, RoundedCornerShape(20.dp))
-            .clickable { onClick() }
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
-            modifier = Modifier.padding(18.dp),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(46.dp)
-                    .background(accentColor.copy(alpha = 0.2f), CircleShape),
+                    .size(40.dp)
+                    .background(accentColor.copy(alpha = 0.18f), RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = title,
                     tint = accentColor,
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
+
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = accentColor.copy(alpha = 0.14f)
+            ) {
                 Text(
-                    text = title,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = textPrimary
-                )
-                Text(
-                    text = subtitle,
-                    fontSize = 12.sp,
-                    color = textSecondary,
-                    lineHeight = 16.sp
+                    text = badge,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.6.sp,
+                    color = accentColor,
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                 )
             }
+        }
+
+        Column {
+            Text(
+                text = title,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = textPrimary
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                fontSize = 11.sp,
+                color = textSecondary,
+                lineHeight = 14.sp,
+                maxLines = 2
+            )
         }
     }
 }

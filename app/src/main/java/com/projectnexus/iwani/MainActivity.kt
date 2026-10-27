@@ -1,5 +1,6 @@
 package com.projectnexus.iwani
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -10,21 +11,21 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
-import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,8 +45,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.projectnexus.iwani.emergency.EmergencySosManager
+import com.projectnexus.iwani.ui.components.interactiveBounceClick
 import com.projectnexus.iwani.ui.screens.*
+import com.projectnexus.iwani.ui.sound.UiSoundManager
 import com.projectnexus.iwani.ui.theme.*
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     private lateinit var sosManager: EmergencySosManager
@@ -54,12 +58,24 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sosManager = EmergencySosManager(this)
+        UiSoundManager.loadPrefs(this)
+
+        val uiPrefs = getSharedPreferences("iwani_ui_settings", Context.MODE_PRIVATE)
+        val initialFontName = uiPrefs.getString("font_style", AppFontStyle.GEOMETRIC.name) ?: AppFontStyle.GEOMETRIC.name
+        val initialFontStyle = try {
+            AppFontStyle.valueOf(initialFontName)
+        } catch (_: Exception) {
+            AppFontStyle.GEOMETRIC
+        }
+        val initialFontScale = uiPrefs.getFloat("font_scale", 1.0f)
 
         setContent {
             var isDarkTheme by remember { mutableStateOf(true) }
             var showIntro by remember { mutableStateOf(true) }
+            var fontStyle by remember { mutableStateOf(initialFontStyle) }
+            var fontScale by remember { mutableFloatStateOf(initialFontScale) }
 
-            // Theme smooth color transitions (interpolates every theme token seamlessly)
+            // Smooth color interpolation across all theme tokens
             val currentBg by animateColorAsState(
                 targetValue = IWaniColors.background(isDarkTheme),
                 animationSpec = tween(500, easing = FastOutSlowInEasing),
@@ -85,25 +101,20 @@ class MainActivity : ComponentActivity() {
                 animationSpec = tween(500, easing = FastOutSlowInEasing),
                 label = "currentPrimary"
             )
-            val currentTextPrimary by animateColorAsState(
-                targetValue = IWaniColors.textPrimary(isDarkTheme),
-                animationSpec = tween(500, easing = FastOutSlowInEasing),
-                label = "currentTextPrimary"
-            )
             val currentTextSecondary by animateColorAsState(
                 targetValue = IWaniColors.textSecondary(isDarkTheme),
                 animationSpec = tween(500, easing = FastOutSlowInEasing),
                 label = "currentTextSecondary"
             )
 
-            // Theme icon rotation animation
+            // Theme icon 360° rotation
             val themeIconRotation by animateFloatAsState(
                 targetValue = if (isDarkTheme) 0f else 360f,
                 animationSpec = tween(550, easing = FastOutSlowInEasing),
                 label = "themeIconRotation"
             )
 
-            // Dynamic Wave / Sweep Reveal Overlay during Theme Transition (inspired by s1mplee67.github.io)
+            // Portfolio Circular Wave Reveal Overlay during Theme Transition
             val themeWaveProgress = remember { Animatable(1f) }
             var previousThemeState by remember { mutableStateOf(isDarkTheme) }
 
@@ -118,7 +129,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            IWaniTheme(isDarkTheme = isDarkTheme) {
+            IWaniTheme(
+                isDarkTheme = isDarkTheme,
+                fontStyle = fontStyle,
+                fontScale = fontScale
+            ) {
                 Crossfade(
                     targetState = showIntro,
                     animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
@@ -129,18 +144,18 @@ class MainActivity : ComponentActivity() {
                             onFinish = { showIntro = false }
                         )
                     } else {
-                        // Main App Container with Scaffold & Theme Wave Reveal Overlay
                         Box(modifier = Modifier.fillMaxSize()) {
                             val navController = rememberNavController()
                             val context = this@MainActivity
-                            val prefs = remember { context.getSharedPreferences("iwani_ai_prefs", android.content.Context.MODE_PRIVATE) }
-                            val modelFile = remember { java.io.File(context.filesDir, "models/qwen2.5_0.5b_instruct.bin") }
+                            val prefs = remember { context.getSharedPreferences("iwani_ai_prefs", Context.MODE_PRIVATE) }
+                            val modelFile = remember { File(context.filesDir, "models/qwen2.5_0.5b_instruct.bin") }
                             val isModelInstalled = remember {
-                                prefs.getBoolean("qwen_downloaded", false) && modelFile.exists() && modelFile.length() >= (350L * 1024L * 1024L * 0.98).toLong()
+                                prefs.getBoolean("qwen_downloaded", false) &&
+                                    modelFile.exists() &&
+                                    modelFile.length() >= (350L * 1024L * 1024L * 0.98).toLong()
                             }
                             val startRoute = if (isModelInstalled) "home" else "model_manager"
                             var currentRoute by remember { mutableStateOf(startRoute) }
-                            // Default to ENGLISH as requested by user
                             var appLanguage by remember { mutableStateOf(AppLanguage.ENGLISH) }
 
                             LaunchedEffect(appLanguage) {
@@ -152,11 +167,12 @@ class MainActivity : ComponentActivity() {
                             Scaffold(
                                 containerColor = currentBg,
                                 topBar = {
+                                    // Uncrowded Minimalist TopAppBar — prevents any text wrapping
                                     TopAppBar(
                                         title = {
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.clickable {
+                                                modifier = Modifier.interactiveBounceClick {
                                                     if (currentRoute != "home") {
                                                         currentRoute = "home"
                                                         navController.navigate("home") {
@@ -170,65 +186,60 @@ class MainActivity : ComponentActivity() {
                                                     contentDescription = "iWani Logo",
                                                     modifier = Modifier.size(36.dp)
                                                 )
-                                                Spacer(Modifier.width(9.dp))
-                                                Text(
-                                                    text = "iWani",
-                                                    fontWeight = FontWeight.Black,
-                                                    fontSize = 20.sp,
-                                                    color = currentAccent
-                                                )
-                                                Spacer(Modifier.width(5.dp))
-                                                Text(
-                                                    text = "Nexus",
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (isDarkTheme) Color(0xFF93C5FD) else TextSecondary
-                                                )
+                                                Spacer(Modifier.width(10.dp))
+                                                Column {
+                                                    Text(
+                                                        text = "iWani",
+                                                        fontWeight = FontWeight.Black,
+                                                        fontSize = 19.sp,
+                                                        color = currentAccent,
+                                                        maxLines = 1,
+                                                        softWrap = false
+                                                    )
+                                                    Text(
+                                                        text = "PROJECT NEXUS",
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                        letterSpacing = 1.4.sp,
+                                                        color = if (isDarkTheme) Color(0xFF93C5FD) else currentTextSecondary,
+                                                        maxLines = 1,
+                                                        softWrap = false
+                                                    )
+                                                }
                                             }
                                         },
                                         actions = {
-                                            // Theme Toggle: [ 🌙 Dark / ☀️ Light ] with rotation animation
-                                            IconButton(
-                                                onClick = { isDarkTheme = !isDarkTheme }
-                                            ) {
-                                                Icon(
-                                                    imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                                                    contentDescription = "Toggle Theme",
-                                                    tint = currentAccent,
-                                                    modifier = Modifier.rotate(themeIconRotation)
-                                                )
-                                            }
-
-                                            // High-Visibility Language Switcher with USA (EN) & Philippine (TL) Flags
+                                            // Compact Flag Language Pill: [ 🇺🇸 EN | 🇵🇭 TL ]
                                             Surface(
                                                 shape = RoundedCornerShape(22.dp),
                                                 color = currentSurface,
                                                 modifier = Modifier
-                                                    .padding(end = 4.dp)
+                                                    .padding(end = 6.dp)
                                                     .border(1.dp, currentBorder, RoundedCornerShape(22.dp))
                                             ) {
                                                 Row(
                                                     modifier = Modifier.padding(horizontal = 3.dp, vertical = 3.dp),
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    // English (USA Flag)
                                                     val isEn = appLanguage == AppLanguage.ENGLISH
                                                     Surface(
                                                         shape = RoundedCornerShape(18.dp),
                                                         color = if (isEn) currentPrimary else Color.Transparent,
                                                         modifier = Modifier
                                                             .clip(RoundedCornerShape(18.dp))
-                                                            .clickable { appLanguage = AppLanguage.ENGLISH }
+                                                            .interactiveBounceClick(isToggle = true) {
+                                                                appLanguage = AppLanguage.ENGLISH
+                                                            }
                                                     ) {
                                                         Row(
                                                             verticalAlignment = Alignment.CenterVertically,
-                                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
                                                         ) {
                                                             Image(
                                                                 painter = painterResource(id = R.drawable.flag_usa),
-                                                                contentDescription = "USA Flag (English)",
+                                                                contentDescription = "USA Flag",
                                                                 modifier = Modifier
-                                                                    .size(width = 20.dp, height = 13.dp)
+                                                                    .size(width = 18.dp, height = 12.dp)
                                                                     .clip(RoundedCornerShape(2.dp))
                                                             )
                                                             Spacer(Modifier.width(4.dp))
@@ -243,24 +254,25 @@ class MainActivity : ComponentActivity() {
 
                                                     Spacer(Modifier.width(2.dp))
 
-                                                    // Tagalog (Philippine Flag)
                                                     val isTl = appLanguage == AppLanguage.TAGALOG
                                                     Surface(
                                                         shape = RoundedCornerShape(18.dp),
                                                         color = if (isTl) currentPrimary else Color.Transparent,
                                                         modifier = Modifier
                                                             .clip(RoundedCornerShape(18.dp))
-                                                            .clickable { appLanguage = AppLanguage.TAGALOG }
+                                                            .interactiveBounceClick(isToggle = true) {
+                                                                appLanguage = AppLanguage.TAGALOG
+                                                            }
                                                     ) {
                                                         Row(
                                                             verticalAlignment = Alignment.CenterVertically,
-                                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
                                                         ) {
                                                             Image(
                                                                 painter = painterResource(id = R.drawable.flag_philippines),
-                                                                contentDescription = "Philippine Flag (Tagalog)",
+                                                                contentDescription = "Philippine Flag",
                                                                 modifier = Modifier
-                                                                    .size(width = 20.dp, height = 13.dp)
+                                                                    .size(width = 18.dp, height = 12.dp)
                                                                     .clip(RoundedCornerShape(2.dp))
                                                             )
                                                             Spacer(Modifier.width(4.dp))
@@ -275,31 +287,18 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
 
-                                            // Model AI Lokal Manager Button
+                                            // Theme Toggle Button with 360° Spin & Sound
                                             IconButton(
                                                 onClick = {
-                                                    currentRoute = "model_manager"
-                                                    navController.navigate("model_manager")
+                                                    UiSoundManager.playToggle(context, !isDarkTheme)
+                                                    isDarkTheme = !isDarkTheme
                                                 }
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Default.CloudDownload,
-                                                    contentDescription = "Model AI Lokal",
-                                                    tint = currentAccent
-                                                )
-                                            }
-
-                                            // About Us Info Button
-                                            IconButton(
-                                                onClick = {
-                                                    currentRoute = "about"
-                                                    navController.navigate("about")
-                                                }
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Info,
-                                                    contentDescription = "About Project Nexus",
-                                                    tint = currentAccent
+                                                    imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                                    contentDescription = "Toggle Theme",
+                                                    tint = currentAccent,
+                                                    modifier = Modifier.rotate(themeIconRotation)
                                                 )
                                             }
                                         },
@@ -323,42 +322,57 @@ class MainActivity : ComponentActivity() {
 
                                         NavigationBarItem(
                                             icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                                            label = { Text("Home") },
+                                            label = { Text("Home", fontSize = 11.sp) },
                                             selected = currentRoute == "home",
                                             colors = navColors,
                                             onClick = {
+                                                UiSoundManager.playNav(context)
                                                 currentRoute = "home"
                                                 navController.navigate("home")
                                             }
                                         )
                                         NavigationBarItem(
                                             icon = { Icon(Icons.Default.Videocam, contentDescription = "Camera") },
-                                            label = { Text(if (isTagalog) "Kamera" else "Camera") },
+                                            label = { Text(if (isTagalog) "Kamera" else "Camera", fontSize = 11.sp) },
                                             selected = currentRoute == "camera",
                                             colors = navColors,
                                             onClick = {
+                                                UiSoundManager.playNav(context)
                                                 currentRoute = "camera"
                                                 navController.navigate("camera")
                                             }
                                         )
                                         NavigationBarItem(
                                             icon = { Icon(Icons.Default.Campaign, contentDescription = "SOS") },
-                                            label = { Text("SOS") },
+                                            label = { Text("SOS", fontSize = 11.sp) },
                                             selected = currentRoute == "sos",
                                             colors = navColors,
                                             onClick = {
+                                                UiSoundManager.playNav(context)
                                                 currentRoute = "sos"
                                                 navController.navigate("sos")
                                             }
                                         )
                                         NavigationBarItem(
                                             icon = { Icon(Icons.Default.Forum, contentDescription = "Translate") },
-                                            label = { Text(if (isTagalog) "Salin" else "Translate") },
+                                            label = { Text(if (isTagalog) "Salin" else "Translate", fontSize = 11.sp) },
                                             selected = currentRoute == "translate",
                                             colors = navColors,
                                             onClick = {
+                                                UiSoundManager.playNav(context)
                                                 currentRoute = "translate"
                                                 navController.navigate("translate")
+                                            }
+                                        )
+                                        NavigationBarItem(
+                                            icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
+                                            label = { Text(if (isTagalog) "Setting" else "Settings", fontSize = 11.sp) },
+                                            selected = currentRoute == "settings",
+                                            colors = navColors,
+                                            onClick = {
+                                                UiSoundManager.playNav(context)
+                                                currentRoute = "settings"
+                                                navController.navigate("settings")
                                             }
                                         )
                                     }
@@ -367,6 +381,12 @@ class MainActivity : ComponentActivity() {
                                 NavHost(
                                     navController = navController,
                                     startDestination = startRoute,
+                                    enterTransition = {
+                                        fadeIn(animationSpec = tween(260)) + scaleIn(initialScale = 0.96f, animationSpec = tween(260))
+                                    },
+                                    exitTransition = {
+                                        fadeOut(animationSpec = tween(200))
+                                    },
                                     modifier = Modifier.padding(innerPadding)
                                 ) {
                                     composable("home") {
@@ -416,6 +436,35 @@ class MainActivity : ComponentActivity() {
                                             isDarkTheme = isDarkTheme
                                         )
                                     }
+                                    composable("settings") {
+                                        SettingsScreen(
+                                            appLanguage = appLanguage,
+                                            onLanguageChange = { appLanguage = it },
+                                            isDarkTheme = isDarkTheme,
+                                            onThemeChange = { isDarkTheme = it },
+                                            fontStyle = fontStyle,
+                                            onFontStyleChange = {
+                                                fontStyle = it
+                                                uiPrefs.edit().putString("font_style", it.name).apply()
+                                            },
+                                            fontScale = fontScale,
+                                            onFontScaleChange = {
+                                                fontScale = it
+                                                uiPrefs.edit().putFloat("font_scale", it).apply()
+                                            },
+                                            onNavigateToModelManager = {
+                                                currentRoute = "model_manager"
+                                                navController.navigate("model_manager")
+                                            },
+                                            onNavigateToAbout = {
+                                                currentRoute = "about"
+                                                navController.navigate("about")
+                                            },
+                                            onReplayIntro = {
+                                                showIntro = true
+                                            }
+                                        )
+                                    }
                                     composable("model_manager") {
                                         AiModelManagerScreen(
                                             appLanguage = appLanguage,
@@ -451,7 +500,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
-                            // Dynamic Wave / Sweep Reveal Overlay during Theme Transition (inspired by s1mplee67.github.io)
+                            // Portfolio Wave Reveal Overlay during Theme Transition
                             if (themeWaveProgress.value < 1f) {
                                 val p = themeWaveProgress.value
                                 val waveColor = if (isDarkTheme) DarkBackground else Color(0xFFF8FAFC)
@@ -461,7 +510,7 @@ class MainActivity : ComponentActivity() {
                                 Canvas(
                                     modifier = Modifier.fillMaxSize()
                                 ) {
-                                    val origin = Offset(size.width - 130f * density.density, 42f * density.density)
+                                    val origin = Offset(size.width - 36f * density.density, 42f * density.density)
                                     val maxR = kotlin.math.hypot(size.width.toDouble(), size.height.toDouble()).toFloat() * 1.05f
                                     val r = p * maxR
 

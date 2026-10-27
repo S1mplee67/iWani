@@ -392,7 +392,7 @@ fun SplashScreen(
                     Spacer(Modifier.height(8.dp))
 
                     Text(
-                        text = "FILIPINO SIGN LANGUAGE • AI NEXUS",
+                        text = "FILIPINO SIGN LANGUAGE • PROJECT NEXUS",
                         color = Color(0xFF94A3B8),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
