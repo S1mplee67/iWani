@@ -16,19 +16,22 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.*
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FiberManualRecord
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.SpaceBar
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
@@ -38,22 +41,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import com.projectnexus.iwani.AppLanguage
-import com.projectnexus.iwani.R
 import com.projectnexus.iwani.emergency.EmergencySosManager
 import com.projectnexus.iwani.ml.FslCameraAnalyzer
+import com.projectnexus.iwani.ui.components.FslAlphabetFullModal
+import com.projectnexus.iwani.ui.components.interactiveBounceClick
 import com.projectnexus.iwani.ui.theme.*
 import kotlinx.coroutines.delay
 import java.util.concurrent.Executors
@@ -67,8 +73,9 @@ fun FslCameraScreen(
     val isTagalog = appLanguage.isTagalog
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val focusManager = LocalFocusManager.current
 
-    val surfaceColor = if (isDarkTheme) DarkSurfaceGlass else Color.White.copy(alpha = 0.92f)
+    val surfaceColor = if (isDarkTheme) DarkSurfaceGlass else Color.White.copy(alpha = 0.94f)
     val borderColor = if (isDarkTheme) DarkSurfaceBorder else Color(0xFFE2E8F0)
     val textPrimaryColor = if (isDarkTheme) TextPrimary else Color(0xFF0F172A)
     val textSecondaryColor = if (isDarkTheme) TextSecondary else Color(0xFF64748B)
@@ -93,7 +100,41 @@ fun FslCameraScreen(
 
     var detectedLetter by remember { mutableStateOf("") }
     var detectedConfidence by remember { mutableFloatStateOf(0.0f) }
-    var accumulatedWord by remember { mutableStateOf("") }
+
+    // Editable TextFieldValue so users can tap between any formed letters, move cursor, and type/insert mid-word
+    var wordFieldValue by remember { mutableStateOf(TextFieldValue(text = "", selection = TextRange(0))) }
+    val accumulatedWord = wordFieldValue.text
+
+    fun insertAtCursor(insertStr: String) {
+        val currentText = wordFieldValue.text
+        val cursor = wordFieldValue.selection.start.coerceIn(0, currentText.length)
+        val end = wordFieldValue.selection.end.coerceIn(cursor, currentText.length)
+        val newText = currentText.substring(0, cursor) + insertStr + currentText.substring(end)
+        val newCursor = cursor + insertStr.length
+        wordFieldValue = TextFieldValue(
+            text = newText,
+            selection = TextRange(newCursor)
+        )
+    }
+
+    fun deleteAtCursor() {
+        val currentText = wordFieldValue.text
+        if (currentText.isEmpty()) return
+        val start = wordFieldValue.selection.start.coerceIn(0, currentText.length)
+        val end = wordFieldValue.selection.end.coerceIn(start, currentText.length)
+        if (start != end) {
+            val newText = currentText.removeRange(start, end)
+            wordFieldValue = TextFieldValue(text = newText, selection = TextRange(start))
+        } else if (start > 0) {
+            val newText = currentText.removeRange(start - 1, start)
+            wordFieldValue = TextFieldValue(text = newText, selection = TextRange(start - 1))
+        } else {
+            // If cursor is at index 0, delete last character as fallback convenience
+            val newText = currentText.dropLast(1)
+            wordFieldValue = TextFieldValue(text = newText, selection = TextRange(newText.length))
+        }
+    }
+
     var handLandmarks by remember { mutableStateOf<List<NormalizedLandmark>?>(null) }
     var lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_FRONT) }
     var showCheatSheet by remember { mutableStateOf(false) }
@@ -118,7 +159,7 @@ fun FslCameraScreen(
         }
     }
 
-    // Dynamic Camera Binding — Re-binds smoothly when lensFacing (front/back) changes
+    // Dynamic Camera Binding
     LaunchedEffect(cameraProvider, previewView, lensFacing, lifecycleOwner) {
         val provider = cameraProvider ?: return@LaunchedEffect
         val pView = previewView ?: return@LaunchedEffect
@@ -140,7 +181,7 @@ fun FslCameraScreen(
             detectedConfidence = conf
             handLandmarks = landmarks
             if (committed && letter.isNotEmpty()) {
-                accumulatedWord += letter
+                insertAtCursor(letter)
             }
         }
 
@@ -171,7 +212,6 @@ fun FslCameraScreen(
         }
     }
 
-    // Clean disposal on leaving screen
     DisposableEffect(Unit) {
         onDispose {
             activeRecording?.stop()
@@ -179,7 +219,6 @@ fun FslCameraScreen(
         }
     }
 
-    // Recording duration timer
     LaunchedEffect(isRecording) {
         if (isRecording) {
             recordingDuration = 0
@@ -192,7 +231,6 @@ fun FslCameraScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(DarkBackground)) {
         if (hasCameraPermission) {
-            // Camera Stream View
             AndroidView(
                 factory = { ctx ->
                     PreviewView(ctx).apply {
@@ -210,21 +248,14 @@ fun FslCameraScreen(
             if (landmarks != null && landmarks.isNotEmpty()) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val fingerBones = listOf(
-                        // Thumb
                         0 to 1, 1 to 2, 2 to 3, 3 to 4,
-                        // Index
                         0 to 5, 5 to 6, 6 to 7, 7 to 8,
-                        // Middle
                         0 to 9, 9 to 10, 10 to 11, 11 to 12,
-                        // Ring
                         0 to 13, 13 to 14, 14 to 15, 15 to 16,
-                        // Pinky
                         0 to 17, 17 to 18, 18 to 19, 19 to 20,
-                        // Palm
                         5 to 9, 9 to 13, 13 to 17
                     )
 
-                    // Draw connecting bones
                     for ((s, e) in fingerBones) {
                         if (s < landmarks.size && e < landmarks.size) {
                             val p1 = landmarks[s]
@@ -243,7 +274,6 @@ fun FslCameraScreen(
                         }
                     }
 
-                    // Draw landmark joint points
                     for (lm in landmarks) {
                         val px = if (isFrontCamera) (1f - lm.x()) * size.width else lm.x() * size.width
                         val py = lm.y() * size.height
@@ -266,7 +296,7 @@ fun FslCameraScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 40.dp, start = 16.dp, end = 16.dp),
+                    .padding(top = 24.dp, start = 16.dp, end = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -289,22 +319,26 @@ fun FslCameraScreen(
                         color = if (hasValidDetection) SuccessGreen else textPrimaryColor,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                     )
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Cheat sheet / reference chart button
                     IconButton(
                         onClick = { showCheatSheet = true },
                         modifier = Modifier
                             .background(surfaceColor, CircleShape)
                             .border(1.dp, borderColor, CircleShape)
                     ) {
-                        Icon(imageVector = Icons.Default.MenuBook, contentDescription = "FSL Guide", tint = IcctGold)
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                            contentDescription = "FSL Guide",
+                            tint = IcctGold
+                        )
                     }
 
-                    // Flip camera button (Now fully dynamic with feedback)
                     IconButton(
                         onClick = {
                             if (isRecording) {
@@ -373,7 +407,7 @@ fun FslCameraScreen(
                     color = EmergencyRed.copy(alpha = 0.9f),
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 90.dp)
+                        .padding(top = 74.dp)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
@@ -393,7 +427,7 @@ fun FslCameraScreen(
                 }
             }
 
-            // Bottom Word Control & Recording Bar (Translucent Glassmorphism)
+            // Bottom Word Control & Editable Mid-Word Typing Bar
             Surface(
                 shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
                 color = surfaceColor,
@@ -402,18 +436,32 @@ fun FslCameraScreen(
                     .fillMaxWidth()
                     .border(1.dp, borderColor, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
             ) {
-                Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 18.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = if (isTagalog) "Nabubuong Salita / Salin:" else "Formed Word / Translation:",
-                            color = textSecondaryColor,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isTagalog) "Nabubuong Salita / Salin:" else "Formed Word / Translation:",
+                                color = textSecondaryColor,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Text(
+                                text = if (isTagalog)
+                                    "Pindutin ang pagitan ng mga titik o ◀ ▶ para mag-type"
+                                else
+                                    "Tap between letters or use ◀ ▶ to type anywhere",
+                                color = textSecondaryColor.copy(alpha = 0.78f),
+                                fontSize = 10.sp,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
 
                         // Record Button Toggle (Sends directly to Gallery)
                         Surface(
@@ -426,7 +474,6 @@ fun FslCameraScreen(
                             TextButton(
                                 onClick = {
                                     if (!isRecording) {
-                                        // Start recording
                                         val vc = videoCaptureInstance
                                         if (vc != null) {
                                             val contentValues = ContentValues().apply {
@@ -451,7 +498,11 @@ fun FslCameraScreen(
                                                         is VideoRecordEvent.Finalize -> {
                                                             isRecording = false
                                                             if (!event.hasError()) {
-                                                                Toast.makeText(context, "✓ Translation video saved to Gallery (Movies/iWani)!", Toast.LENGTH_LONG).show()
+                                                                Toast.makeText(
+                                                                    context,
+                                                                    if (isTagalog) "✓ Na-save ang video sa Gallery (Movies/iWani)!" else "✓ Video saved to Gallery (Movies/iWani)!",
+                                                                    Toast.LENGTH_LONG
+                                                                ).show()
                                                             }
                                                         }
                                                     }
@@ -460,11 +511,14 @@ fun FslCameraScreen(
                                             isRecording = true
                                         }
                                     } else {
-                                        // Stop recording
                                         activeRecording?.stop()
                                         activeRecording = null
                                         isRecording = false
-                                        Toast.makeText(context, "✓ Translation recorded and saved to Gallery!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(
+                                            context,
+                                            if (isTagalog) "✓ Na-save na ang na-record na video sa Gallery!" else "✓ Recorded video saved to Gallery!",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                 },
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
@@ -473,47 +527,128 @@ fun FslCameraScreen(
                                     imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.FiberManualRecord,
                                     contentDescription = "Record",
                                     tint = if (isRecording) Color.White else EmergencyRed,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(15.dp)
                                 )
                                 Spacer(Modifier.width(4.dp))
                                 Text(
-                                    text = if (isRecording) (if (isTagalog) "Ihinto" else "Stop") else (if (isTagalog) "I-record sa Gallery" else "Record to Gallery"),
+                                    text = if (isRecording) (if (isTagalog) "Ihinto" else "Stop") else (if (isTagalog) "I-record" else "Record to Gallery"),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
                                     color = if (isRecording) Color.White else textPrimaryColor
                                 )
                             }
                         }
                     }
 
-                    // Formed Word display with instant Clear-All (x) button
+                    Spacer(Modifier.height(8.dp))
+
+                    // Interactive Editable Formed Word Box + Left/Right Cursor Controls
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = if (accumulatedWord.isNotEmpty()) accumulatedWord else (if (isTagalog) "[Wala pang titik]" else "[No letters yet]"),
-                            color = if (accumulatedWord.isNotEmpty()) TextGold else textSecondaryColor,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
+                        // Move Cursor Left (◀) between formed letters
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isDarkTheme) DarkSurfaceHigh else Color(0xFFF1F5F9),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+                            modifier = Modifier
+                                .size(38.dp)
+                                .interactiveBounceClick {
+                                    val pos = (wordFieldValue.selection.start - 1).coerceAtLeast(0)
+                                    wordFieldValue = wordFieldValue.copy(selection = TextRange(pos))
+                                }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                    contentDescription = "Cursor Left",
+                                    tint = IcctGold,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        // Editable Formed Word TextField — Tap between any letters to place cursor & type!
+                        OutlinedTextField(
+                            value = wordFieldValue,
+                            onValueChange = { newVal ->
+                                wordFieldValue = newVal.copy(text = newVal.text.uppercase())
+                            },
+                            placeholder = {
+                                Text(
+                                    text = if (isTagalog) "Mag-sign o mag-type dito..." else "Sign or tap to type here...",
+                                    fontSize = 15.sp,
+                                    color = textSecondaryColor
+                                )
+                            },
+                            textStyle = TextStyle(
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.5.sp,
+                                color = TextGold
+                            ),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Characters,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = { focusManager.clearFocus() }
+                            ),
+                            trailingIcon = {
+                                if (accumulatedWord.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = {
+                                            wordFieldValue = TextFieldValue("", TextRange(0))
+                                            Toast.makeText(
+                                                context,
+                                                if (isTagalog) "Nabura ang buong salita." else "Cleared all letters.",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Clear All",
+                                            tint = EmergencyRed,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = if (isDarkTheme) Color(0xFF0F172A) else Color(0xFFF8FAFC),
+                                unfocusedContainerColor = if (isDarkTheme) Color(0xFF0F172A).copy(alpha = 0.7f) else Color(0xFFF8FAFC),
+                                focusedBorderColor = IcctGold,
+                                unfocusedBorderColor = borderColor,
+                                cursorColor = IcctGold
+                            ),
                             modifier = Modifier.weight(1f)
                         )
 
-                        if (accumulatedWord.isNotEmpty()) {
-                            IconButton(
-                                onClick = {
-                                    accumulatedWord = ""
-                                    Toast.makeText(context, if (isTagalog) "Nabura ang buong salita." else "Cleared all letters.", Toast.LENGTH_SHORT).show()
-                                },
-                                modifier = Modifier.size(32.dp)
-                            ) {
+                        // Move Cursor Right (▶) between formed letters
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isDarkTheme) DarkSurfaceHigh else Color(0xFFF1F5F9),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+                            modifier = Modifier
+                                .size(38.dp)
+                                .interactiveBounceClick {
+                                    val len = wordFieldValue.text.length
+                                    val pos = (wordFieldValue.selection.start + 1).coerceAtMost(len)
+                                    wordFieldValue = wordFieldValue.copy(selection = TextRange(pos))
+                                }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Clear All",
-                                    tint = EmergencyRed,
+                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                    contentDescription = "Cursor Right",
+                                    tint = IcctGold,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -522,20 +657,17 @@ fun FslCameraScreen(
 
                     Spacer(Modifier.height(10.dp))
 
-                    // 3 Weighted Interactive Control Buttons (Space, Backspace, Speak)
+                    // 3 Weighted Interactive Control Buttons (Space at cursor, Delete at cursor, Speak)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Space button
                         Button(
-                            onClick = {
-                                accumulatedWord += " "
-                            },
+                            onClick = { insertAtCursor(" ") },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(48.dp),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                                .height(46.dp),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (isDarkTheme) DarkSurfaceHigh else Color(0xFFF1F5F9)
@@ -554,19 +686,22 @@ fun FslCameraScreen(
                             )
                         }
 
-                        // Backspace / Erase letter button
                         Button(
                             onClick = {
                                 if (accumulatedWord.isNotEmpty()) {
-                                    accumulatedWord = accumulatedWord.dropLast(1)
+                                    deleteAtCursor()
                                 } else {
-                                    Toast.makeText(context, if (isTagalog) "Walang titik na buburahin." else "No letters to erase.", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(
+                                        context,
+                                        if (isTagalog) "Walang titik na buburahin." else "No letters to erase.",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 }
                             },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(48.dp),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                                .height(46.dp),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (isDarkTheme) DarkSurfaceHigh else Color(0xFFF1F5F9)
@@ -585,19 +720,22 @@ fun FslCameraScreen(
                             )
                         }
 
-                        // Speak Out Loud button
                         Button(
                             onClick = {
                                 if (accumulatedWord.isNotBlank()) {
                                     sosManager.speak(accumulatedWord)
                                 } else {
-                                    Toast.makeText(context, if (isTagalog) "Mag-sign muna ng mga titik bago magsalita." else "Sign letters first before speaking.", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(
+                                        context,
+                                        if (isTagalog) "Mag-sign o mag-type muna ng salita bago magsalita." else "Sign or type letters first before speaking.",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 }
                             },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(48.dp),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                                .height(46.dp),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = IcctBlue),
                             border = androidx.compose.foundation.BorderStroke(1.dp, IcctBlue)
@@ -625,7 +763,7 @@ fun FslCameraScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = if (isTagalog) "Kinakailangan ang Pahintulot sa Camera" else "Camera Permission Required",
+                    text = if (isTagalog) "Kinakailangan ang Pahintulot sa Kamera" else "Camera Permission Required",
                     color = textPrimaryColor,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
@@ -635,60 +773,17 @@ fun FslCameraScreen(
                     onClick = { launcher.launch(Manifest.permission.CAMERA) },
                     colors = ButtonDefaults.buttonColors(containerColor = IcctBlue)
                 ) {
-                    Text(if (isTagalog) "Payagan ang Camera" else "Grant Camera Permission")
+                    Text(if (isTagalog) "Payagan ang Kamera" else "Grant Camera Permission")
                 }
             }
         }
 
-        // Live FSL Alphabet Reference Dialog
+        // Enlarged Full-Portrait FSL Alphabet Chart (A-Z) with Ambient Aurora Glow
         if (showCheatSheet) {
-            Dialog(
-                onDismissRequest = { showCheatSheet = false },
-                properties = DialogProperties(usePlatformDefaultWidth = false)
-            ) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    shape = RoundedCornerShape(20.dp),
-                    color = if (isDarkTheme) DarkBackground else Color.White,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
-                ) {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "FSL Alphabet Guide (A-Z)",
-                                color = IcctGold,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            )
-                            IconButton(onClick = { showCheatSheet = false }) {
-                                Icon(Icons.Default.Close, contentDescription = "Close", tint = textPrimaryColor)
-                            }
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.alfabet_fsl_full),
-                                contentDescription = "FSL Guide",
-                                modifier = Modifier.fillMaxWidth(),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
-                    }
-                }
-            }
+            FslAlphabetFullModal(
+                isTagalog = isTagalog,
+                onDismiss = { showCheatSheet = false }
+            )
         }
     }
 }

@@ -91,6 +91,140 @@ object UiSoundManager {
         }
     }
 
+    /**
+     * Synthesizes a Clash-of-Clans Villager / RPG mascot vocal murmur ("Ahh~", "Hmm?", "Ooh!", "Aha!")
+     * using glottal fundamental + vowel formant harmonics (F1 & F2) and natural pitch contour.
+     */
+    fun playVillagerVoice(context: Context? = null, character: String = "grace", cue: String = "ahh") {
+        context?.let { triggerHaptic(it, 20L) }
+        if (!soundEnabled) return
+        thread {
+            when (character.lowercase()) {
+                "grace" -> {
+                    when (cue.lowercase()) {
+                        "hmm" -> {
+                            // Rising curious female "Hmm~?"
+                            playVocalFormantSync(f0Start = 250.0, f0End = 335.0, f1 = 320.0, f2 = 980.0, durationMs = 190)
+                        }
+                        "ooh" -> {
+                            // Bright 2-syllable "Oh-aaah!"
+                            playVocalFormantSync(f0Start = 290.0, f0End = 350.0, f1 = 450.0, f2 = 1150.0, durationMs = 110)
+                            Thread.sleep(25)
+                            playVocalFormantSync(f0Start = 340.0, f0End = 285.0, f1 = 720.0, f2 = 1320.0, durationMs = 160)
+                        }
+                        else -> {
+                            // Cheerful "Ahh~!"
+                            playVocalFormantSync(f0Start = 270.0, f0End = 340.0, f1 = 740.0, f2 = 1280.0, durationMs = 185)
+                        }
+                    }
+                }
+                "kian" -> {
+                    when (cue.lowercase()) {
+                        "aha" -> {
+                            // Energetic 2-syllable male "A-ha!"
+                            playVocalFormantSync(f0Start = 155.0, f0End = 175.0, f1 = 640.0, f2 = 1120.0, durationMs = 95)
+                            Thread.sleep(30)
+                            playVocalFormantSync(f0Start = 185.0, f0End = 230.0, f1 = 700.0, f2 = 1240.0, durationMs = 155)
+                        }
+                        "ooh" -> {
+                            // Deep impressed "Ooooh!"
+                            playVocalFormantSync(f0Start = 150.0, f0End = 195.0, f1 = 380.0, f2 = 860.0, durationMs = 200)
+                        }
+                        else -> {
+                            // Classic villager male "Hmm-hmm!"
+                            playVocalFormantSync(f0Start = 148.0, f0End = 182.0, f1 = 290.0, f2 = 880.0, durationMs = 175)
+                        }
+                    }
+                }
+                "shouko" -> {
+                    // Gentle soft anime "Umm~ / Ehehe!"
+                    playVocalFormantSync(f0Start = 315.0, f0End = 370.0, f1 = 520.0, f2 = 1420.0, durationMs = 125)
+                    Thread.sleep(30)
+                    playVocalFormantSync(f0Start = 365.0, f0End = 415.0, f1 = 680.0, f2 = 1580.0, durationMs = 150)
+                }
+                else -> {
+                    // Finale trio celebratory "Hmm! Ahh! Yay~!"
+                    playVocalFormantSync(f0Start = 165.0, f0End = 210.0, f1 = 620.0, f2 = 1150.0, durationMs = 110)
+                    Thread.sleep(20)
+                    playVocalFormantSync(f0Start = 280.0, f0End = 345.0, f1 = 720.0, f2 = 1320.0, durationMs = 115)
+                    Thread.sleep(20)
+                    playVocalFormantSync(f0Start = 340.0, f0End = 430.0, f1 = 680.0, f2 = 1540.0, durationMs = 165)
+                }
+            }
+        }
+    }
+
+    private fun playVocalFormantSync(
+        f0Start: Double,
+        f0End: Double,
+        f1: Double,
+        f2: Double,
+        durationMs: Int
+    ) {
+        try {
+            val sampleRate = 24000
+            val numSamples = (sampleRate * durationMs) / 1000
+            val samples = ShortArray(numSamples)
+            var p0 = 0.0
+            var p1 = 0.0
+            var p2 = 0.0
+            val amp = (volume.coerceIn(0.15f, 1.0f) * 15000).toInt()
+
+            for (i in 0 until numSamples) {
+                val t = i.toDouble() / numSamples
+                // Smooth S-curve pitch glide + natural 5.8 Hz vocal vibrato
+                val vibrato = 1.0 + 0.018 * sin(2.0 * PI * 5.8 * (i.toDouble() / sampleRate))
+                val f0 = (f0Start + (f0End - f0Start) * t) * vibrato
+
+                // Soft vocal envelope (attack, sustain, rounded release)
+                val env = when {
+                    t < 0.14 -> t / 0.14
+                    t > 0.78 -> ((1.0 - t) / 0.22).coerceAtLeast(0.0)
+                    else -> 1.0
+                }
+
+                p0 += (2.0 * PI * f0) / sampleRate
+                p1 += (2.0 * PI * f1) / sampleRate
+                p2 += (2.0 * PI * f2) / sampleRate
+
+                // Rich glottal fundamental + 2nd harmonic + vowel formant modulation
+                val glottal = 0.55 * sin(p0) + 0.22 * sin(p0 * 2.0)
+                val formants = 0.16 * sin(p1) * (0.5 + 0.5 * sin(p0)) + 0.07 * sin(p2)
+                val wave = (glottal + formants).coerceIn(-1.0, 1.0)
+                samples[i] = (wave * env * amp).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            }
+
+            val bufferSizeBytes = numSamples * 2
+            val track = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(sampleRate)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build()
+                )
+                .setBufferSizeInBytes(
+                    bufferSizeBytes.coerceAtLeast(
+                        AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                    )
+                )
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .build()
+
+            track.write(samples, 0, numSamples)
+            track.play()
+            Thread.sleep(durationMs.toLong() + 18L)
+            track.stop()
+            track.release()
+        } catch (_: Exception) {}
+    }
+
     private fun triggerHaptic(context: Context, durationMs: Long) {
         if (!hapticsEnabled) return
         try {

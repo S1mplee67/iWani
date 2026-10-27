@@ -5,10 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeDown
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.projectnexus.iwani.AppLanguage
@@ -41,7 +42,9 @@ fun SettingsScreen(
     onFontScaleChange: (Float) -> Unit,
     onNavigateToModelManager: () -> Unit,
     onNavigateToAbout: () -> Unit,
-    onReplayIntro: () -> Unit
+    onReplayIntro: () -> Unit,
+    onOpenMascotTutorial: () -> Unit = {},
+    onOpenTeamInbox: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val isTagalog = appLanguage.isTagalog
@@ -69,26 +72,34 @@ fun SettingsScreen(
     ) {
         Spacer(Modifier.height(8.dp))
 
-        // Header
+        // Header — left Column uses weight(1f) so MetalBadge NEVER wraps or compresses
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 12.dp)
+            ) {
                 Text(
                     text = if (isTagalog) "Mga Setting" else "Settings & Studio",
-                    fontSize = 26.sp,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Black,
-                    color = textPrimary
+                    color = textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = if (isTagalog)
-                        "I-customize ang tema, tunog, font, at AI engine"
+                        "I-customize ang tema, tunog, font at AI engine"
                     else
-                        "Customize theme, sound effects, typography & AI engine",
-                    fontSize = 13.sp,
-                    color = textSecondary
+                        "Customize theme, sound, font & AI engine",
+                    fontSize = 12.sp,
+                    color = textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             MetalBadge(
@@ -104,13 +115,16 @@ fun SettingsScreen(
             accentColor = primary,
             isDarkTheme = isDarkTheme
         ) {
-            // Theme Switch Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 10.dp)
+                ) {
                     Text(
                         text = if (isTagalog) "Dark Mode (Midnight Navy)" else "Dark Mode (Midnight Navy)",
                         fontWeight = FontWeight.Bold,
@@ -141,7 +155,6 @@ fun SettingsScreen(
                 color = border
             )
 
-            // Language Flag Selector
             Text(
                 text = if (isTagalog) "Wika ng App" else "Application Language",
                 fontWeight = FontWeight.Bold,
@@ -191,7 +204,6 @@ fun SettingsScreen(
             )
             Spacer(Modifier.height(10.dp))
 
-            // 2x2 Grid of Font Choices
             val styles = AppFontStyle.values()
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (rowIdx in 0..1) {
@@ -217,21 +229,25 @@ fun SettingsScreen(
                                     }
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)
                                 ) {
                                     Text(
                                         text = "Aa Bb",
                                         fontFamily = style.fontFamily,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 16.sp,
-                                        color = if (isSelected) accent else textPrimary
+                                        color = if (isSelected) accent else textPrimary,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
-                                    Spacer(Modifier.height(2.dp))
+                                    Spacer(Modifier.height(3.dp))
                                     Text(
                                         text = if (isTagalog) style.labelTl else style.labelEn,
                                         fontFamily = style.fontFamily,
                                         fontSize = 11.sp,
-                                        color = textSecondary
+                                        color = textSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -242,7 +258,6 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(14.dp))
 
-            // Text Scale Selector
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -266,7 +281,11 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val scales = listOf(0.92f to "Compact", 1.0f to "Default", 1.10f to "Large")
+                val scales = listOf(
+                    0.92f to (if (isTagalog) "Maliit" else "Compact"),
+                    1.0f to (if (isTagalog) "Normal" else "Default"),
+                    1.10f to (if (isTagalog) "Malaki" else "Large")
+                )
                 scales.forEach { (scaleVal, label) ->
                     val isSel = kotlin.math.abs(fontScale - scaleVal) < 0.03f
                     Surface(
@@ -282,6 +301,8 @@ fun SettingsScreen(
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isSel) Color.White else textSecondary,
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier
                                 .padding(vertical = 8.dp)
                                 .wrapContentWidth(Alignment.CenterHorizontally)
@@ -303,7 +324,11 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 10.dp)
+                ) {
                     Text(
                         text = if (isTagalog) "Tunog sa Pagpindot ng Button" else "Button Click Sound Effects",
                         fontWeight = FontWeight.Bold,
@@ -311,7 +336,7 @@ fun SettingsScreen(
                         color = textPrimary
                     )
                     Text(
-                        text = if (isTagalog) "Natatanging synthesized audio kapag pumipindot" else "Unique synthesized chime on every tap",
+                        text = if (isTagalog) "Synthesized audio + Villager voice effects" else "Synthesized button chimes & chibi villager voices",
                         fontSize = 12.sp,
                         color = textSecondary
                     )
@@ -333,7 +358,6 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(10.dp))
 
-            // Sound Profile Picker (Tap to preview sound!)
             Text(
                 text = if (isTagalog) "Uri ng Tunog (Pindutin para marinig)" else "Sound Profile (Tap to preview)",
                 fontWeight = FontWeight.Bold,
@@ -382,9 +406,11 @@ fun SettingsScreen(
                                     Spacer(Modifier.width(6.dp))
                                     Text(
                                         text = if (isTagalog) prof.labelTl else prof.labelEn,
-                                        fontSize = 12.sp,
+                                        fontSize = 11.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isSel) textPrimary else textSecondary
+                                        color = if (isSel) textPrimary else textSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -395,12 +421,11 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(10.dp))
 
-            // Volume Slider
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Default.VolumeDown, contentDescription = null, tint = textSecondary, modifier = Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Filled.VolumeDown, contentDescription = null, tint = textSecondary, modifier = Modifier.size(18.dp))
                 Slider(
                     value = soundVolume,
                     onValueChange = {
@@ -421,13 +446,16 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = border)
 
-            // Haptics Switch
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 10.dp)
+                ) {
                     Text(
                         text = if (isTagalog) "Haptic Vibration" else "Haptic Tactile Feedback",
                         fontWeight = FontWeight.Bold,
@@ -456,7 +484,7 @@ fun SettingsScreen(
             }
         }
 
-        // ================= 4. AI ENGINE, INTRO & UPCOMING MASCOT GUIDE =================
+        // ================= 4. AI ENGINE EXTRACTION MANAGER =================
         BorderBeamBox(
             active = true,
             cornerRadius = 20.dp,
@@ -481,12 +509,18 @@ fun SettingsScreen(
                     accentColor = accent
                 )
                 Spacer(Modifier.width(14.dp))
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
+                ) {
                     Text(
-                        text = if (isTagalog) "I-extract ang AI Model (Qwen 2.5)" else "AI Model Extraction Manager",
+                        text = if (isTagalog) "Extracting AI Model (Qwen 2.5)" else "Extracting AI Model (Qwen 2.5)",
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
-                        color = textPrimary
+                        color = textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = if (isTagalog)
@@ -494,10 +528,113 @@ fun SettingsScreen(
                         else
                             "Extract & verify 350 MB offline neural weights",
                         fontSize = 12.sp,
-                        color = textSecondary
+                        color = textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 Icon(Icons.Default.ChevronRight, contentDescription = null, tint = accent)
+            }
+        }
+
+        // ================= 5. CHIBI MASCOT GUIDE (GRACE, KIAN & SHOUKO) + TEAM INBOX =================
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = surface,
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, accent.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                .interactiveBounceClick { onOpenMascotTutorial() }
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.chibi_grace),
+                        contentDescription = "Grace",
+                        modifier = Modifier.size(46.dp)
+                    )
+                    Image(
+                        painter = painterResource(id = R.drawable.chibi_kian),
+                        contentDescription = "Kian",
+                        modifier = Modifier.size(46.dp)
+                    )
+                    Image(
+                        painter = painterResource(id = R.drawable.chibi_shouko),
+                        contentDescription = "Shouko",
+                        modifier = Modifier.size(46.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isTagalog) "Gabay sa App (Grace, Kian & Shouko)" else "Chibi Mascot Guide (Grace, Kian & Shouko)",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 13.5.sp,
+                            color = textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = if (isTagalog)
+                                "Buksan ang interactive tutorial na may FSL at Villager sounds!"
+                            else
+                                "Interactive walkthrough of every feature with Villager voice sounds!",
+                            fontSize = 11.5.sp,
+                            color = textSecondary
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onOpenMascotTutorial,
+                        colors = ButtonDefaults.buttonColors(containerColor = primary),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                    ) {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = if (isTagalog) "Simulan ang Gabay" else "Launch Guide",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = onOpenTeamInbox,
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, accent),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                    ) {
+                        Icon(Icons.Default.Inbox, contentDescription = null, tint = accent, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = if (isTagalog) "Team Inbox" else "Team Inbox",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = accent,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
             }
         }
 
@@ -515,22 +652,26 @@ fun SettingsScreen(
                     .interactiveBounceClick { onNavigateToAbout() }
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.Groups, contentDescription = null, tint = primary, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(10.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = if (isTagalog) "Tungkol sa Team" else "About Team",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
-                            color = textPrimary
+                            color = textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Project Nexus",
                             fontSize = 11.sp,
-                            color = textSecondary
+                            color = textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -545,79 +686,28 @@ fun SettingsScreen(
                     .interactiveBounceClick { onReplayIntro() }
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.MovieFilter, contentDescription = null, tint = accent, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(10.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = if (isTagalog) "Ulitin ang Intro" else "Replay Intro",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
-                            color = textPrimary
+                            color = textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Ascendens",
                             fontSize = 11.sp,
-                            color = textSecondary
+                            color = textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
-                }
-            }
-        }
-
-        // Reserved Hook for the Upcoming ICCT Uniform Chibi Mascot Welcome Guide
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = surface,
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, border, RoundedCornerShape(18.dp))
-        ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(accent.copy(alpha = 0.15f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = if (isTagalog) "Gabay sa App (Chibi Mascot)" else "Interactive Mascot Guide",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = textPrimary
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = accent.copy(alpha = 0.18f)
-                        ) {
-                            Text(
-                                text = "READY FOR MASCOT",
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = accent,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                    Text(
-                        text = if (isTagalog)
-                            "Handa na para sa ICCT uniform chibi mascot onboarding tutorial para sa mga bagong installer."
-                        else
-                            "Slot reserved for the ICCT uniform chibi mascot welcome tutorial for new installers.",
-                        fontSize = 11.sp,
-                        color = textSecondary
-                    )
                 }
             }
         }
@@ -660,7 +750,9 @@ private fun SettingsSectionCard(
                     text = title,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
-                    color = textPrimary
+                    color = textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Spacer(Modifier.height(14.dp))
@@ -708,7 +800,9 @@ private fun LanguageOptionTile(
                 text = label,
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp,
-                color = textPrimary
+                color = textPrimary,
+                maxLines = 1,
+                softWrap = false
             )
         }
     }

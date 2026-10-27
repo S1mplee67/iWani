@@ -194,7 +194,12 @@ fun AiModelManagerScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 10.dp)
+            ) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = surface,
@@ -213,17 +218,21 @@ fun AiModelManagerScreen(
                     }
                 }
                 Spacer(Modifier.width(12.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isTagalog) "AI Model Extractor" else "Extracting AI Model",
+                        text = if (isTagalog) "Extracting AI Model" else "Extracting AI Model",
                         fontWeight = FontWeight.Black,
-                        fontSize = 22.sp,
-                        color = textPrimary
+                        fontSize = 20.sp,
+                        color = textPrimary,
+                        maxLines = 1,
+                        softWrap = false
                     )
                     Text(
                         text = if (isTagalog) "100% Offline Neural Engine" else "100% Offline On-Device Neural Setup",
-                        fontSize = 12.sp,
-                        color = textSecondary
+                        fontSize = 11.5.sp,
+                        color = textSecondary,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }

@@ -45,6 +45,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.projectnexus.iwani.emergency.EmergencySosManager
+import com.projectnexus.iwani.ui.components.ChibiMascotTutorialDialog
+import com.projectnexus.iwani.ui.components.TeamFeedbackInboxDialog
 import com.projectnexus.iwani.ui.components.interactiveBounceClick
 import com.projectnexus.iwani.ui.screens.*
 import com.projectnexus.iwani.ui.sound.UiSoundManager
@@ -157,6 +159,10 @@ class MainActivity : ComponentActivity() {
                             val startRoute = if (isModelInstalled) "home" else "model_manager"
                             var currentRoute by remember { mutableStateOf(startRoute) }
                             var appLanguage by remember { mutableStateOf(AppLanguage.ENGLISH) }
+                            var showMascotTutorial by remember {
+                                mutableStateOf(!uiPrefs.getBoolean("mascot_tutorial_v2_seen", false))
+                            }
+                            var showTeamInbox by remember { mutableStateOf(false) }
 
                             LaunchedEffect(appLanguage) {
                                 sosManager.setLanguage(appLanguage.isTagalog)
@@ -412,6 +418,12 @@ class MainActivity : ComponentActivity() {
                                             onNavigateToAbout = {
                                                 currentRoute = "about"
                                                 navController.navigate("about")
+                                            },
+                                            onOpenMascotTutorial = {
+                                                showMascotTutorial = true
+                                            },
+                                            onOpenTeamInbox = {
+                                                showTeamInbox = true
                                             }
                                         )
                                     }
@@ -462,6 +474,12 @@ class MainActivity : ComponentActivity() {
                                             },
                                             onReplayIntro = {
                                                 showIntro = true
+                                            },
+                                            onOpenMascotTutorial = {
+                                                showMascotTutorial = true
+                                            },
+                                            onOpenTeamInbox = {
+                                                showTeamInbox = true
                                             }
                                         )
                                     }
@@ -534,6 +552,39 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                 }
+                            }
+
+                            // Chibi Mascots Interactive Tutorial (Grace, Kian & Easter Egg Shouko Nishimiya)
+                            if (showMascotTutorial && currentRoute != "model_manager") {
+                                ChibiMascotTutorialDialog(
+                                    appLanguage = appLanguage,
+                                    isDarkTheme = isDarkTheme,
+                                    onDismiss = {
+                                        uiPrefs.edit().putBoolean("mascot_tutorial_v2_seen", true).apply()
+                                        showMascotTutorial = false
+                                    },
+                                    onNavigateToRoute = { targetRoute ->
+                                        uiPrefs.edit().putBoolean("mascot_tutorial_v2_seen", true).apply()
+                                        showMascotTutorial = false
+                                        currentRoute = targetRoute
+                                        navController.navigate(targetRoute)
+                                    },
+                                    onOpenFeedbackInbox = {
+                                        uiPrefs.edit().putBoolean("mascot_tutorial_v2_seen", true).apply()
+                                        showMascotTutorial = false
+                                        showTeamInbox = true
+                                    }
+                                )
+                            }
+
+                            // Team Feedback Inbox Dialog
+                            if (showTeamInbox) {
+                                TeamFeedbackInboxDialog(
+                                    appLanguage = appLanguage,
+                                    onDismiss = {
+                                        showTeamInbox = false
+                                    }
+                                )
                             }
                         }
                     }

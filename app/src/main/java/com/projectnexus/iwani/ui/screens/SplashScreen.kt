@@ -556,47 +556,95 @@ fun SplashScreen(
                     modifier = Modifier.size(250.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Luminous Portal Shockwave & Orbital Energy Halo (no square background!)
+                    // Distinct Non-Repetitive Portal Backdrop per Institutional Logo Scene
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val center = Offset(size.width / 2f, size.height / 2f)
                         val maxR = size.minDimension / 2f
                         val sw = shockwaveProgress.value
+
+                        // Soft radial glow behind the emblem
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    ringColor.copy(alpha = 0.35f),
+                                    IcctGold.copy(alpha = 0.12f),
+                                    Color.Transparent
+                                ),
+                                center = center,
+                                radius = maxR * 1.15f
+                            ),
+                            radius = maxR * 1.15f,
+                            center = center
+                        )
 
                         if (sw < 0.99f) {
                             drawCircle(
                                 color = ringColor.copy(alpha = (1f - sw) * 0.7f),
                                 radius = maxR * (0.55f + sw * 0.65f),
                                 center = center,
-                                style = Stroke(width = 8f * (1f - sw * 0.5f))
+                                style = Stroke(width = 7f * (1f - sw * 0.5f))
                             )
                         }
 
-                        // Rotating energy arcs framing the transparent emblem
-                        drawArc(
-                            color = ringColor.copy(alpha = 0.6f),
-                            startAngle = orbitAngle,
-                            sweepAngle = 110f,
-                            useCenter = false,
-                            style = Stroke(width = 3.5f, cap = StrokeCap.Round)
-                        )
-                        drawArc(
-                            color = IcctGold.copy(alpha = 0.5f),
-                            startAngle = orbitAngle + 180f,
-                            sweepAngle = 110f,
-                            useCenter = false,
-                            style = Stroke(width = 3.5f, cap = StrokeCap.Round)
-                        )
-
-                        // 6 orbiting light particles
-                        for (i in 0 until 6) {
-                            val rad = Math.toRadians((orbitAngle + i * 60f).toDouble())
-                            val px = center.x + (maxR * 0.96f) * cos(rad).toFloat()
-                            val py = center.y + (maxR * 0.96f) * sin(rad).toFloat()
-                            drawCircle(
-                                color = Color.White.copy(alpha = 0.75f),
-                                radius = 3.5f,
-                                center = Offset(px, py)
-                            )
+                        when (currentScene) {
+                            IntroScene.ICCT_SEAL -> {
+                                // Scene 3 Design: Concentric Royal Pulse Rings + 8 Starlight Points
+                                drawCircle(
+                                    color = ringColor.copy(alpha = 0.4f),
+                                    radius = maxR * 0.95f,
+                                    center = center,
+                                    style = Stroke(width = 2f)
+                                )
+                                for (i in 0 until 8) {
+                                    val rad = Math.toRadians((i * 45.0) + shimmerSweep * 25.0)
+                                    val px = center.x + (maxR * 0.95f) * cos(rad).toFloat()
+                                    val py = center.y + (maxR * 0.95f) * sin(rad).toFloat()
+                                    drawCircle(
+                                        color = Color(0xFF93C5FD).copy(alpha = 0.85f),
+                                        radius = if (i % 2 == 0) 4.5f else 2.5f,
+                                        center = Offset(px, py)
+                                    )
+                                }
+                            }
+                            IntroScene.ENG_SOCIETY -> {
+                                // Scene 4 Design: 12 Radial Engineering Sunburst Rays
+                                for (i in 0 until 12) {
+                                    val rad = Math.toRadians(i * 30.0)
+                                    val innerR = maxR * 0.82f
+                                    val outerR = maxR * (0.96f + 0.06f * sin(shimmerSweep * 3.14f + i))
+                                    drawLine(
+                                        color = ringColor.copy(alpha = 0.55f),
+                                        start = Offset(center.x + innerR * cos(rad).toFloat(), center.y + innerR * sin(rad).toFloat()),
+                                        end = Offset(center.x + outerR * cos(rad).toFloat(), center.y + outerR * sin(rad).toFloat()),
+                                        strokeWidth = 3f,
+                                        cap = StrokeCap.Round
+                                    )
+                                }
+                            }
+                            else -> {
+                                // Scene 5 Design: 1992 Computer Engineering Circuit Halo + Tech Nodes
+                                drawCircle(
+                                    color = IcctGold.copy(alpha = 0.45f),
+                                    radius = maxR * 0.92f,
+                                    center = center,
+                                    style = Stroke(width = 2.5f)
+                                )
+                                drawCircle(
+                                    color = Color(0xFF34D399).copy(alpha = 0.35f),
+                                    radius = maxR * 1.02f,
+                                    center = center,
+                                    style = Stroke(width = 1.5f)
+                                )
+                                for (i in 0 until 6) {
+                                    val rad = Math.toRadians(i * 60.0 + 30.0)
+                                    val r1 = maxR * 0.92f
+                                    val r2 = maxR * 1.04f
+                                    val p1 = Offset(center.x + r1 * cos(rad).toFloat(), center.y + r1 * sin(rad).toFloat())
+                                    val p2 = Offset(center.x + r2 * cos(rad).toFloat(), center.y + r2 * sin(rad).toFloat())
+                                    drawLine(color = IcctGold, start = p1, end = p2, strokeWidth = 2.5f)
+                                    drawCircle(color = Color.White, radius = 4f, center = p2)
+                                }
+                            }
                         }
                     }
 
