@@ -168,9 +168,7 @@ class MainActivity : ComponentActivity() {
                                                 Image(
                                                     painter = painterResource(id = R.drawable.logo_iwani),
                                                     contentDescription = "iWani Logo",
-                                                    modifier = Modifier
-                                                        .size(34.dp)
-                                                        .clip(CircleShape)
+                                                    modifier = Modifier.size(36.dp)
                                                 )
                                                 Spacer(Modifier.width(9.dp))
                                                 Text(

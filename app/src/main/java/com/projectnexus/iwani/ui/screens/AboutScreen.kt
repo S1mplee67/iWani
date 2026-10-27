@@ -125,7 +125,7 @@ fun AboutScreen(
                         modifier = Modifier.padding(22.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Institutional Logos Trio: ICCT Seal, iWani Nexus, ICCT Engineering 1992
+                        // Institutional Logos: ICCT Seal, iWani PH-Flag Logo, Engineering Society, Engineering 1992
                         Row(
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
@@ -133,25 +133,25 @@ fun AboutScreen(
                             Image(
                                 painter = painterResource(id = R.drawable.icct_seal),
                                 contentDescription = "ICCT Seal",
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(CircleShape)
+                                modifier = Modifier.size(52.dp)
                             )
-                            Spacer(Modifier.width(14.dp))
+                            Spacer(Modifier.width(12.dp))
                             Image(
                                 painter = painterResource(id = R.drawable.logo_iwani),
                                 contentDescription = "iWani Logo",
-                                modifier = Modifier
-                                    .size(68.dp)
-                                    .clip(RoundedCornerShape(16.dp))
+                                modifier = Modifier.size(64.dp)
                             )
-                            Spacer(Modifier.width(14.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Image(
+                                painter = painterResource(id = R.drawable.icct_eng_soc_2002),
+                                contentDescription = "ICCT Engineering Society",
+                                modifier = Modifier.size(52.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
                             Image(
                                 painter = painterResource(id = R.drawable.icct_engineering_1992),
                                 contentDescription = "ICCT Engineering 1992",
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(CircleShape)
+                                modifier = Modifier.size(52.dp)
                             )
                         }
 
