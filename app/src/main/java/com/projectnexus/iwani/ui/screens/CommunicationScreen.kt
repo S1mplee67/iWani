@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.projectnexus.iwani.AppLanguage
 import com.projectnexus.iwani.emergency.EmergencySosManager
 import com.projectnexus.iwani.nlp.QwenFslTranslator
+import com.projectnexus.iwani.ui.components.autoSlideIfOverflow
 import com.projectnexus.iwani.ui.components.interactiveBounceClick
 import com.projectnexus.iwani.ui.theme.*
 
@@ -475,7 +476,8 @@ fun CommunicationScreen(
                             fontSize = 13.sp,
                             color = Color.White,
                             maxLines = 1,
-                            softWrap = false
+                            softWrap = false,
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                     }
 

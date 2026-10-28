@@ -160,7 +160,7 @@ class MainActivity : ComponentActivity() {
                             var currentRoute by remember { mutableStateOf(startRoute) }
                             var appLanguage by remember { mutableStateOf(AppLanguage.ENGLISH) }
                             var showMascotTutorial by remember {
-                                mutableStateOf(!uiPrefs.getBoolean("mascot_tutorial_v2_seen", false))
+                                mutableStateOf(!uiPrefs.getBoolean("mascot_tutorial_v3_seen", false))
                             }
                             var showTeamInbox by remember { mutableStateOf(false) }
 
@@ -554,23 +554,25 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
-                            // Chibi Mascots Interactive Tutorial (Grace, Kian & Easter Egg Shouko Nishimiya)
+                            // Chibi Mascots Interactive Walkthrough (Grace, Kian & Special Guest Shouko)
                             if (showMascotTutorial && currentRoute != "model_manager") {
                                 ChibiMascotTutorialDialog(
                                     appLanguage = appLanguage,
                                     isDarkTheme = isDarkTheme,
                                     onDismiss = {
-                                        uiPrefs.edit().putBoolean("mascot_tutorial_v2_seen", true).apply()
+                                        uiPrefs.edit().putBoolean("mascot_tutorial_v3_seen", true).apply()
                                         showMascotTutorial = false
                                     },
                                     onNavigateToRoute = { targetRoute ->
-                                        uiPrefs.edit().putBoolean("mascot_tutorial_v2_seen", true).apply()
-                                        showMascotTutorial = false
-                                        currentRoute = targetRoute
-                                        navController.navigate(targetRoute)
+                                        if (currentRoute != targetRoute) {
+                                            currentRoute = targetRoute
+                                            navController.navigate(targetRoute) {
+                                                launchSingleTop = true
+                                            }
+                                        }
                                     },
                                     onOpenFeedbackInbox = {
-                                        uiPrefs.edit().putBoolean("mascot_tutorial_v2_seen", true).apply()
+                                        uiPrefs.edit().putBoolean("mascot_tutorial_v3_seen", true).apply()
                                         showMascotTutorial = false
                                         showTeamInbox = true
                                     }

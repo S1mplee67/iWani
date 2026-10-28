@@ -332,24 +332,24 @@ fun HomeScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = if (isTagalog)
-                                "Gabay nina Grace at Kian (Tutorial)"
+                                "Gabay nina Grace at Kian (Walkthrough)"
                             else
-                                "Grace & Kian • Interactive App Guide",
+                                "Grace & Kian • Interactive Walkthrough",
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 13.sp,
                             color = textPrimary,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                         Text(
                             text = if (isTagalog)
-                                "Paano gamitin ang bawat feature + Team Inbox"
+                                "Pumili ng Bahagi (Part 1–6) o buksan ang Team Inbox"
                             else
-                                "Full feature tour with FSL chibis & Team Inbox",
+                                "Play visual novel guide (Parts 1–6) & Team Inbox",
                             fontSize = 11.sp,
                             color = textSecondary,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                     }
                     Spacer(Modifier.width(6.dp))
@@ -523,7 +523,7 @@ fun HomeScreen(
                             fontSize = 13.sp,
                             color = textPrimary,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                         Text(
                             text = if (isTagalog)
@@ -533,7 +533,7 @@ fun HomeScreen(
                             fontSize = 11.sp,
                             color = textSecondary,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                     }
                     Surface(
@@ -625,7 +625,7 @@ private fun BentoTileContent(
                 fontSize = 15.sp,
                 color = textPrimary,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                modifier = Modifier.autoSlideIfOverflow()
             )
             Spacer(Modifier.height(2.dp))
             Text(

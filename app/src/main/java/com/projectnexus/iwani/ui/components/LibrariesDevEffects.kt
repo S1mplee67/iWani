@@ -2,8 +2,10 @@ package com.projectnexus.iwani.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -88,6 +90,18 @@ fun Modifier.interactiveBounceClick(
             onClick()
         }
 }
+
+/**
+ * Smoothly slides single-line text to the left ONLY when the text is wider than its box.
+ * Prevents truncated "..." text in chips, badges, headers, and buttons.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+fun Modifier.autoSlideIfOverflow(): Modifier = this.basicMarquee(
+    iterations = Int.MAX_VALUE,
+    repeatDelayMillis = 1200,
+    initialDelayMillis = 700,
+    velocity = 26.dp
+)
 
 /**
  * Libraries.dev `border-beam` implementation for Jetpack Compose:
@@ -411,7 +425,8 @@ fun MetalBadge(
     text: String,
     modifier: Modifier = Modifier,
     isDark: Boolean = true,
-    fontSize: TextUnit = 10.sp
+    fontSize: TextUnit = 10.sp,
+    onClick: (() -> Unit)? = null
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "MetalSheen")
     val sheen by infiniteTransition.animateFloat(
@@ -424,8 +439,15 @@ fun MetalBadge(
     )
 
     val shape = RoundedCornerShape(50)
+    val clickModifier = if (onClick != null) {
+        Modifier.interactiveBounceClick(onClick = onClick)
+    } else {
+        Modifier
+    }
+
     Box(
         modifier = modifier
+            .then(clickModifier)
             .wrapContentWidth(unbounded = false)
             .clip(shape)
             .background(

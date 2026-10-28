@@ -1,16 +1,20 @@
 package com.projectnexus.iwani.ui.theme
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.DeviceFontFamilyName
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.sp
 
 enum class AppFontStyle(val labelEn: String, val labelTl: String, val fontFamily: FontFamily) {
@@ -108,9 +112,20 @@ fun IWaniTheme(
     fontScale: Float = 1.0f,
     content: @Composable () -> Unit
 ) {
-    MaterialTheme(
-        colorScheme = if (isDarkTheme) IcctDarkColorScheme else ClassicLightColorScheme,
-        typography = buildAppTypography(fontStyle, fontScale),
-        content = content
+    val baseDensity = LocalDensity.current
+    val scaledDensity = Density(
+        density = baseDensity.density,
+        fontScale = (baseDensity.fontScale * fontScale).coerceIn(0.75f, 1.45f)
     )
+    CompositionLocalProvider(LocalDensity provides scaledDensity) {
+        MaterialTheme(
+            colorScheme = if (isDarkTheme) IcctDarkColorScheme else ClassicLightColorScheme,
+            typography = buildAppTypography(fontStyle, 1.0f)
+        ) {
+            ProvideTextStyle(
+                value = TextStyle(fontFamily = fontStyle.fontFamily),
+                content = content
+            )
+        }
+    }
 }

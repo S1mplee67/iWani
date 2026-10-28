@@ -89,7 +89,7 @@ fun SettingsScreen(
                     fontWeight = FontWeight.Black,
                     color = textPrimary,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    modifier = Modifier.autoSlideIfOverflow()
                 )
                 Text(
                     text = if (isTagalog)
@@ -99,12 +99,13 @@ fun SettingsScreen(
                     fontSize = 12.sp,
                     color = textSecondary,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    modifier = Modifier.autoSlideIfOverflow()
                 )
             }
             MetalBadge(
                 text = "PROJECT NEXUS",
-                isDark = isDarkTheme
+                isDark = isDarkTheme,
+                onClick = onNavigateToAbout
             )
         }
 
@@ -247,7 +248,7 @@ fun SettingsScreen(
                                         fontSize = 11.sp,
                                         color = textSecondary,
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        modifier = Modifier.autoSlideIfOverflow()
                                     )
                                 }
                             }
@@ -271,20 +272,40 @@ fun SettingsScreen(
                 )
                 Text(
                     text = "${(fontScale * 100).toInt()}%",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 14.sp,
                     color = accent
                 )
             }
-            Spacer(Modifier.height(8.dp))
+
+            Slider(
+                value = fontScale,
+                onValueChange = { newScale ->
+                    val rounded = (kotlin.math.round(newScale * 20f) / 20f).coerceIn(0.85f, 1.25f)
+                    if (kotlin.math.abs(rounded - fontScale) >= 0.02f) {
+                        UiSoundManager.playClick(context)
+                        onFontScaleChange(rounded)
+                    }
+                },
+                valueRange = 0.85f..1.25f,
+                steps = 7,
+                colors = SliderDefaults.colors(
+                    thumbColor = accent,
+                    activeTrackColor = primary,
+                    inactiveTrackColor = border
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 val scales = listOf(
-                    0.92f to (if (isTagalog) "Maliit" else "Compact"),
-                    1.0f to (if (isTagalog) "Normal" else "Default"),
-                    1.10f to (if (isTagalog) "Malaki" else "Large")
+                    0.85f to (if (isTagalog) "85% Maliit" else "85% Small"),
+                    1.00f to (if (isTagalog) "100% Normal" else "100% Default"),
+                    1.15f to (if (isTagalog) "115% Malaki" else "115% Large"),
+                    1.25f to "125% XL"
                 )
                 scales.forEach { (scaleVal, label) ->
                     val isSel = kotlin.math.abs(fontScale - scaleVal) < 0.03f
@@ -298,17 +319,39 @@ fun SettingsScreen(
                     ) {
                         Text(
                             text = label,
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isSel) Color.White else textSecondary,
                             maxLines = 1,
                             softWrap = false,
                             modifier = Modifier
-                                .padding(vertical = 8.dp)
-                                .wrapContentWidth(Alignment.CenterHorizontally)
+                                .padding(horizontal = 6.dp, vertical = 8.dp)
+                                .autoSlideIfOverflow()
                         )
                     }
                 }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // Live Text Scale Preview Strip
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = primary.copy(alpha = 0.10f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, border, RoundedCornerShape(12.dp))
+            ) {
+                Text(
+                    text = if (isTagalog)
+                        "Preview (${(fontScale * 100).toInt()}%): Kumusta! Ganito kalaki ang teksto sa buong iWani app."
+                    else
+                        "Live Preview (${(fontScale * 100).toInt()}%): Hello! All text across iWani scales to this size.",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = textPrimary,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                )
             }
         }
 
@@ -520,7 +563,7 @@ fun SettingsScreen(
                         fontSize = 15.sp,
                         color = textPrimary,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        modifier = Modifier.autoSlideIfOverflow()
                     )
                     Text(
                         text = if (isTagalog)
@@ -530,7 +573,7 @@ fun SettingsScreen(
                         fontSize = 12.sp,
                         color = textSecondary,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        modifier = Modifier.autoSlideIfOverflow()
                     )
                 }
                 Icon(Icons.Default.ChevronRight, contentDescription = null, tint = accent)
@@ -574,13 +617,13 @@ fun SettingsScreen(
                             fontSize = 13.5.sp,
                             color = textPrimary,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                         Text(
                             text = if (isTagalog)
-                                "Buksan ang interactive tutorial na may FSL at Villager sounds!"
+                                "Pumili ng Bahagi (Part 1–6) o simulan ang buong walkthrough!"
                             else
-                                "Interactive walkthrough of every feature with Villager voice sounds!",
+                                "Pick any Tutorial Part (Part 1–6) or start the full walkthrough!",
                             fontSize = 11.5.sp,
                             color = textSecondary
                         )
@@ -605,12 +648,13 @@ fun SettingsScreen(
                         Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            text = if (isTagalog) "Simulan ang Gabay" else "Launch Guide",
+                            text = if (isTagalog) "Buksan ang Gabay" else "Open Walkthrough",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             maxLines = 1,
-                            softWrap = false
+                            softWrap = false,
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                     }
 
@@ -631,7 +675,8 @@ fun SettingsScreen(
                             fontWeight = FontWeight.Bold,
                             color = accent,
                             maxLines = 1,
-                            softWrap = false
+                            softWrap = false,
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                     }
                 }
@@ -664,14 +709,14 @@ fun SettingsScreen(
                             fontSize = 13.sp,
                             color = textPrimary,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                         Text(
                             text = "Project Nexus",
                             fontSize = 11.sp,
                             color = textSecondary,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                     }
                 }
@@ -698,14 +743,14 @@ fun SettingsScreen(
                             fontSize = 13.sp,
                             color = textPrimary,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                         Text(
                             text = "Ascendens",
                             fontSize = 11.sp,
                             color = textSecondary,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                     }
                 }
