@@ -1,0 +1,39 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="16dp"
+    android:viewportWidth="24"
+    android:viewportHeight="16">
+    <!-- Top Blue Band (Royal Blue) -->
+    <path
+        android:fillColor="#0038A8"
+        android:pathData="M0,0 h24 v8 h-24 Z"/>
+    <!-- Bottom Red Band (Scarlet) -->
+    <path
+        android:fillColor="#CE1126"
+        android:pathData="M0,8 h24 v8 h-24 Z"/>
+    <!-- White Equilateral Triangle on Hoist -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,0 L13.856,8 L0,16 Z"/>
+    <!-- Golden Sun Disc -->
+    <path
+        android:fillColor="#FCD116"
+        android:pathData="M4.62,6 A2,2 0 1,1 4.62,10 A2,2 0 1,1 4.62,6 Z"/>
+    <!-- 8 Sun Rays -->
+    <path
+        android:fillColor="#FCD116"
+        android:strokeColor="#FCD116"
+        android:strokeWidth="0.65"
+        android:strokeLineCap="round"
+        android:pathData="M4.62,4.6 L4.62,11.4 M1.22,8 L8.02,8 M2.21,5.59 L7.03,10.41 M2.21,10.41 L7.03,5.59"/>
+    <!-- 3 Golden Stars -->
+    <path
+        android:fillColor="#FCD116"
+        android:pathData="M1.5,2.4 L1.8,3.2 L2.7,2.9 L2.2,3.6 L2.9,4.2 L2.0,4.1 L1.7,4.9 L1.4,4.1 L0.5,4.1 L1.1,3.5 Z"/>
+    <path
+        android:fillColor="#FCD116"
+        android:pathData="M1.5,13.6 L1.8,12.8 L2.7,13.1 L2.2,12.4 L2.9,11.8 L2.0,11.9 L1.7,11.1 L1.4,11.9 L0.5,11.9 L1.1,12.5 Z"/>
+    <path
+        android:fillColor="#FCD116"
+        android:pathData="M11.2,8 L10.8,7.3 L11.2,6.5 L10.4,6.8 L9.8,6.2 L9.8,7.1 L9.1,7.5 L9.9,7.9 L10.0,8.7 L10.6,8.1 Z"/>
+</vector>
