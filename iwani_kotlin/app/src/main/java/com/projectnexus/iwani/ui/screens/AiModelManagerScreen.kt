@@ -322,17 +322,24 @@ fun AiModelManagerScreen(
 
                     Spacer(Modifier.width(14.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    ) {
                         Text(
                             text = "Qwen2.5-0.5B",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
-                            color = textPrimary
+                            color = textPrimary,
+                            maxLines = 1
                         )
                         Text(
                             text = "Instruct • GGUF INT4 • ~350 MB",
-                            fontSize = 12.sp,
-                            color = textSecondary
+                            fontSize = 11.5.sp,
+                            color = textSecondary,
+                            maxLines = 1,
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                     }
 
@@ -396,12 +403,12 @@ fun AiModelManagerScreen(
 
                 Text(
                     text = if (isTagalog)
-                        "Neural NLP model para sa pagsasalin ng Filipino Sign Language (FSL) sa buong pangungusap at boses nang walang internet."
+                        "Gumagamit ng Transformer Machine Learning (INT4 neural weights) na sinanay sa istruktura ng wika. Kinukuha nito ang mga FSL sign gloss mula sa camera o quick words (hal. 'TULONG BINGI AKO') at binubuo ito bilang natural at kumpletong pangungusap sa Tagalog at English — 100% offline."
                     else
-                        "On-device neural NLP model for translating Filipino Sign Language (FSL) glosses into fluent spoken sentences — 100% offline.",
+                        "Uses Transformer Machine Learning (INT4 quantized neural weights) trained on bilingual language patterns. It takes raw Filipino Sign Language (FSL) glosses from the camera or quick words (e.g., 'TULONG BINGI AKO') and predicts context and grammar to build natural English and Tagalog sentences — 100% offline.",
                     fontSize = 12.sp,
                     color = textSecondary,
-                    lineHeight = 17.sp
+                    lineHeight = 17.5.sp
                 )
 
                 Spacer(Modifier.height(14.dp))
@@ -470,17 +477,24 @@ fun AiModelManagerScreen(
 
                     Spacer(Modifier.width(14.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    ) {
                         Text(
                             text = "MediaPipe FSL 3D",
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
-                            color = textPrimary
+                            color = textPrimary,
+                            maxLines = 1
                         )
                         Text(
                             text = "21-Joint + 97.4% Neural • ~7.8 MB",
-                            fontSize = 12.sp,
-                            color = textSecondary
+                            fontSize = 11.5.sp,
+                            color = textSecondary,
+                            maxLines = 1,
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                     }
 
@@ -508,6 +522,18 @@ fun AiModelManagerScreen(
                         }
                     }
                 }
+
+                Spacer(Modifier.height(10.dp))
+
+                Text(
+                    text = if (isTagalog)
+                        "Pinagsasama ang Computer Vision at Machine Learning: sinusubaybayan ng MediaPipe ang 21 3D hand-knuckle landmarks (X, Y, Z coordinates) sa camera, at ipinapasa ang sukat at anggulo ng kamay sa sinanay na TFLite neural network upang makilala ang FSL alphabet at senyas nang may 97.4% accuracy."
+                    else
+                        "Combines Computer Vision and Machine Learning: MediaPipe tracks 21 3D hand-knuckle landmarks (X, Y, Z coordinates) in real time, normalizes hand scale and angle, and feeds the skeletal vectors into our trained TFLite neural network classifier to recognize FSL letters and signs with 97.4% accuracy.",
+                    fontSize = 12.sp,
+                    color = textSecondary,
+                    lineHeight = 17.5.sp
+                )
             }
         }
 

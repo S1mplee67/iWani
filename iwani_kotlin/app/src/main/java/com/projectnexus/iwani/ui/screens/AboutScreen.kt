@@ -28,13 +28,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.projectnexus.iwani.AppLanguage
 import com.projectnexus.iwani.R
+import com.projectnexus.iwani.ui.components.ChibiFaceAvatar
 import com.projectnexus.iwani.ui.theme.*
 
 data class TeamMember(
     val name: String,
     val role: String,
     val initials: String,
-    val isLead: Boolean = false
+    val isLead: Boolean = false,
+    val isGoldName: Boolean = false,
+    val chibiRes: Int? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,21 +61,34 @@ fun AboutScreen(
         TeamMember("Cueto, Lander John D.", "Project Manager", "LC", isLead = true),
         TeamMember("Arteche, Justine Jay", "System Analyst", "JA"),
 
-        // 2. Design & Frontend
+        // 2. Design, Frontend & Backend Engineering
         TeamMember("Alon, Angel Andreian L.", "UI/UX Lead Designer", "AA", isLead = true),
-        TeamMember("Tamarosa, Joycemay O.", "Frontend Developer", "JT"),
-
-        // 3. Backend & Database Engineering
+        TeamMember(
+            name = "Valmonte, Wency Miguel D.",
+            role = "Frontend & Backend Developer",
+            initials = "WV",
+            isLead = true,
+            isGoldName = true
+        ),
         TeamMember("Cunanan, Jhon Carlo A.", "Lead Backend Developer", "JC", isLead = true),
-        TeamMember("Valmonte, Wency Miguel D.", "Backend Developer", "WV"),
         TeamMember("Payla, Dyle Jhoven E.", "Backend Developer", "DP"),
-        TeamMember("Babagay, Mary Grace Ann N.", "Database Administrator", "MB"),
+        TeamMember(
+            name = "Babagay, Mary Grace Ann N.",
+            role = "Database Administrator",
+            initials = "MB",
+            chibiRes = R.drawable.chibi_grace
+        ),
 
-        // 4. DevOps & Quality Assurance
+        // 3. DevOps & Quality Assurance
         TeamMember("Escaner, Leon B.", "DevOps & Deployment Specialist", "LE"),
-        TeamMember("Cagadas, Kian R.", "Quality Assurance", "KC"),
+        TeamMember(
+            name = "Cagadas, Kian R.",
+            role = "Quality Assurance",
+            initials = "KC",
+            chibiRes = R.drawable.chibi_kian
+        ),
 
-        // 5. Technical Documentation & Presentation
+        // 4. Technical Documentation & Presentation
         TeamMember("Lomibao, Milbert A.", "Technical Writer & UML Architect", "ML"),
         TeamMember("Lugay, Brandon Ashley P.", "UAT Coordinator & Pitch Presenter", "BL")
     )
@@ -277,7 +293,15 @@ fun AboutScreen(
                     colors = CardDefaults.cardColors(containerColor = cardSurface),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.dp, if (member.isLead) accent.copy(alpha = 0.45f) else cardBorder, RoundedCornerShape(14.dp))
+                        .border(
+                            width = if (member.isGoldName) 1.5.dp else 1.dp,
+                            color = when {
+                                member.isGoldName -> accent.copy(alpha = 0.85f)
+                                member.isLead -> accent.copy(alpha = 0.45f)
+                                else -> cardBorder
+                            },
+                            shape = RoundedCornerShape(14.dp)
+                        )
                         .clickable {
                             Toast.makeText(context, "${member.name} • ${member.role}", Toast.LENGTH_SHORT).show()
                         }
@@ -286,18 +310,42 @@ fun AboutScreen(
                         modifier = Modifier.padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .background(if (member.isLead) accent.copy(alpha = 0.2f) else if (isDarkTheme) IcctBlue.copy(alpha = 0.2f) else TealPrimary.copy(alpha = 0.12f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = member.initials,
-                                color = if (member.isLead) accent else if (isDarkTheme) Color(0xFF93C5FD) else TealPrimary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
+                        if (member.chibiRes != null) {
+                            ChibiFaceAvatar(
+                                drawableRes = member.chibiRes,
+                                contentDescription = member.name,
+                                size = 46.dp,
+                                shape = CircleShape,
+                                backgroundColor = if (isDarkTheme) Color(0xFF0B1326) else Color(0xFFE0F2FE),
+                                borderColor = if (member.isLead || member.isGoldName) accent else Color(0xFF38BDF8).copy(alpha = 0.7f),
+                                zoomScale = 2.15f
                             )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .background(
+                                        when {
+                                            member.isGoldName -> accent.copy(alpha = 0.25f)
+                                            member.isLead -> accent.copy(alpha = 0.2f)
+                                            isDarkTheme -> IcctBlue.copy(alpha = 0.2f)
+                                            else -> TealPrimary.copy(alpha = 0.12f)
+                                        },
+                                        CircleShape
+                                    )
+                                    .then(
+                                        if (member.isGoldName) Modifier.border(1.2.dp, accent, CircleShape) else Modifier
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = member.initials,
+                                    color = if (member.isLead || member.isGoldName) accent else if (isDarkTheme) Color(0xFF93C5FD) else TealPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
 
                         Spacer(Modifier.width(14.dp))
@@ -305,15 +353,15 @@ fun AboutScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = member.name,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                color = textPrim
+                                fontWeight = if (member.isGoldName) FontWeight.ExtraBold else FontWeight.Bold,
+                                fontSize = 14.5.sp,
+                                color = if (member.isGoldName) accent else textPrim
                             )
                             Text(
                                 text = member.role,
                                 fontSize = 12.sp,
-                                color = if (member.isLead) accent else textSec,
-                                fontWeight = if (member.isLead) FontWeight.SemiBold else FontWeight.Normal
+                                color = if (member.isLead || member.isGoldName) accent else textSec,
+                                fontWeight = if (member.isLead || member.isGoldName) FontWeight.SemiBold else FontWeight.Normal
                             )
                         }
                     }

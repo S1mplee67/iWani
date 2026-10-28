@@ -147,7 +147,7 @@ fun SettingsScreen(
                         color = textPrimary
                     )
                     Text(
-                        text = if (isTagalog) "May wave transition kapag pinindot" else "Smooth portfolio wave transition",
+                        text = if (isTagalog) "Lumipat sa pagitan ng Dark Mode at Day Mode" else "Switch between Dark Mode and Day Mode",
                         fontSize = 12.sp,
                         color = textSecondary
                     )

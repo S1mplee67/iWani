@@ -368,8 +368,8 @@ fun ChibiMascotTutorialDialog(
                     paddingDp = 6f
                 ),
                 demoThemeToggle = true,
-                textEn = "And right beside the flag is our Night & Day Mode button! Tapping the Sun or Moon icon launches a smooth radial wave transition between Night Mode (Midnight Navy for indoors) and Day Mode (bright high-contrast for outdoor sunlight)!",
-                textTl = "At sa tabi ng watawat ay ang ating Night at Day Mode button! Pindutin ang Sun o Moon icon para sa radial wave transition sa pagitan ng Night Mode (Midnight Navy sa loob) at Day Mode (maliwanag kapag nasa labas)!"
+                textEn = "And right beside the flag is our Night & Day Mode button! Tapping the Sun or Moon icon switches the app between Night Mode (Midnight Navy for indoors) and Day Mode (bright high-contrast for outdoor sunlight)!",
+                textTl = "At sa tabi ng watawat ay ang ating Night at Day Mode button! Pindutin ang Sun o Moon icon upang magpalit sa pagitan ng Night Mode (Midnight Navy sa loob) at Day Mode (maliwanag kapag nasa labas)!"
             ),
             WalkthroughDialogueLine(
                 partNumber = 1,
@@ -687,8 +687,8 @@ fun ChibiMascotTutorialDialog(
                     topFraction = 0.175f,
                     bottomFraction = 0.45f
                 ),
-                textEn = "In the 'Appearance & Language' card highlighted here, you can also toggle Dark Mode (Midnight Navy) or Day Mode with its smooth wave transition, or switch between English (US) and Tagalog (PH).",
-                textTl = "Sa 'Hitsura at Wika' card na naka-highlight dito, maaari mo ring i-toggle ang Dark Mode (Midnight Navy) o Day Mode na may wave transition, o magpalit sa pagitan ng English (US) at Tagalog (PH)."
+                textEn = "In the 'Appearance & Language' card highlighted here, you can switch between Dark Mode (Midnight Navy) and Day Mode, or change the app language between English (US) and Tagalog (PH).",
+                textTl = "Sa 'Hitsura at Wika' card na naka-highlight dito, maaari kang lumipat sa pagitan ng Dark Mode (Midnight Navy) at Day Mode, o magpalit ng wika sa English (US) at Tagalog (PH)."
             ),
             WalkthroughDialogueLine(
                 partNumber = 5,
