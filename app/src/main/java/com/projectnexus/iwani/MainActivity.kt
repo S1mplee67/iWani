@@ -31,6 +31,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
@@ -160,8 +161,9 @@ class MainActivity : ComponentActivity() {
                             var currentRoute by remember { mutableStateOf(startRoute) }
                             var appLanguage by remember { mutableStateOf(AppLanguage.ENGLISH) }
                             var showMascotTutorial by remember {
-                                mutableStateOf(!uiPrefs.getBoolean("mascot_tutorial_v3_seen", false))
+                                mutableStateOf(!uiPrefs.getBoolean("mascot_tutorial_v4_seen", false))
                             }
+                            var blurAppBackground by remember { mutableStateOf(false) }
                             var showTeamInbox by remember { mutableStateOf(false) }
 
                             LaunchedEffect(appLanguage) {
@@ -171,6 +173,7 @@ class MainActivity : ComponentActivity() {
                             val isTagalog = appLanguage.isTagalog
 
                             Scaffold(
+                                modifier = Modifier.blur(if (showMascotTutorial && blurAppBackground) 8.dp else 0.dp),
                                 containerColor = currentBg,
                                 topBar = {
                                     // Uncrowded Minimalist TopAppBar — prevents any text wrapping
@@ -558,9 +561,9 @@ class MainActivity : ComponentActivity() {
                             if (showMascotTutorial && currentRoute != "model_manager") {
                                 ChibiMascotTutorialDialog(
                                     appLanguage = appLanguage,
-                                    isDarkTheme = isDarkTheme,
                                     onDismiss = {
-                                        uiPrefs.edit().putBoolean("mascot_tutorial_v3_seen", true).apply()
+                                        uiPrefs.edit().putBoolean("mascot_tutorial_v4_seen", true).apply()
+                                        blurAppBackground = false
                                         showMascotTutorial = false
                                     },
                                     onNavigateToRoute = { targetRoute ->
@@ -572,9 +575,13 @@ class MainActivity : ComponentActivity() {
                                         }
                                     },
                                     onOpenFeedbackInbox = {
-                                        uiPrefs.edit().putBoolean("mascot_tutorial_v3_seen", true).apply()
+                                        uiPrefs.edit().putBoolean("mascot_tutorial_v4_seen", true).apply()
+                                        blurAppBackground = false
                                         showMascotTutorial = false
                                         showTeamInbox = true
+                                    },
+                                    onBlurBackgroundChange = { shouldBlur ->
+                                        blurAppBackground = shouldBlur
                                     }
                                 )
                             }

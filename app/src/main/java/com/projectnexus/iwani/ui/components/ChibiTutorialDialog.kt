@@ -31,10 +31,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -102,20 +109,17 @@ enum class VnSpeaker(
 }
 
 /**
- * Where the spotlight focus box points on the blurred background screen.
+ * Defines a crystal-clear Cutout Spotlight window over the real underlying app UI.
+ * Everything OUTSIDE this rectangle is frosted/darkened out (`ClipOp.Difference`),
+ * while everything INSIDE this rectangle shows the live app screen at 100% clarity!
  */
-enum class SpotlightFocusZone {
-    TOP_BAR,
-    CENTER_HERO,
-    CAMERA_VIEWFINDER,
-    FORMED_WORD_BOX,
-    ALPHABET_CHART_BTN,
-    TRANSLATE_OUTPUT_BOX,
-    QUICK_WORDS_GRID,
-    SOS_CARDS,
-    SETTINGS_CARDS,
-    NONE
-}
+data class SpotlightCutoutSpec(
+    val topFraction: Float,
+    val bottomFraction: Float,
+    val startFraction: Float = 0.035f,
+    val endFraction: Float = 0.965f,
+    val cornerRadiusDp: Float = 20f
+)
 
 /**
  * A single visual-novel dialogue turn inside a Tutorial Part.
@@ -128,9 +132,7 @@ data class WalkthroughDialogueLine(
     val centerSpriteRes: Int? = null,
     val activeSide: String, // "LEFT", "RIGHT", "BOTH", "ALL_THREE"
     val backgroundRoute: String,
-    val focusZone: SpotlightFocusZone,
-    val focusLabelEn: String,
-    val focusLabelTl: String,
+    val cutout: SpotlightCutoutSpec? = null,
     val textEn: String,
     val textTl: String
 )
@@ -151,18 +153,18 @@ data class WalkthroughPartInfo(
 
 /**
  * Blue Archive / Visual Novel Style Interactive Walkthrough Overlay.
- * - Organizes the tutorial into 6 selectable Parts (Part 1..Part 6)
- * - Features multi-pose chibi sprites for Grace, Kian, and Shouko (Special Guest)
- * - Puppet up-and-down bounce animation ONLY when a character speaks, then returns to static
- * - Typewriter text animation on every dialogue line (tap once to finish typing, tap again for next line)
- * - Prev button to review previous dialogues + Top-Right Chat Log modal to read dialogue history
- * - Blurred/dimmed background with a glowing Spotlight Focus pointer ("HERE • ...") over the real app UI
+ * - Renders directly over the real app screen (no opaque box covering the UI!)
+ * - Uses a real Cutout Spotlight (`ClipOp.Difference`) so the surrounding background is darkened/frosted
+ *   while the highlighted UI card on the real app screen shines through at 100% clarity
+ * - When no specific cutout is active (e.g. self-intro & Finale), blurs the whole background gently
+ * - Features 12 normalized chibi sprites (including dedicated Finale "Thank You" poses for Grace, Kian & Shouko)
+ * - Equal 1/3 width for all 3 chibis in the Finale so Kian is the exact same size as Grace and Shouko
  */
 @Composable
 fun ChibiMascotTutorialDialog(
     appLanguage: AppLanguage,
-    isDarkTheme: Boolean = true,
     initialPart: Int = 1,
+    onBlurBackgroundChange: (Boolean) -> Unit = {},
     onDismiss: () -> Unit,
     onNavigateToRoute: (String) -> Unit,
     onOpenFeedbackInbox: () -> Unit
@@ -174,10 +176,10 @@ fun ChibiMascotTutorialDialog(
         listOf(
             WalkthroughPartInfo(
                 partNumber = 1,
-                titleEn = "Part 1: Welcome & What iWani Is For",
-                titleTl = "Bahagi 1: Ano ang iWani at Project Nexus",
-                subtitleEn = "Meet Grace & Kian, top bar controls & app mission",
-                subtitleTl = "Kilalanin sina Grace at Kian at ang layunin ng app",
+                titleEn = "Part 1: Welcome & Home Workspace",
+                titleTl = "Bahagi 1: Home Screen at Project Nexus",
+                subtitleEn = "Meet Grace & Kian, top bar flags, theme wave & bento cards",
+                subtitleTl = "Kilalanin sina Grace at Kian, watawat ng EN/TL at bento cards",
                 badgeText = "PART 1",
                 accentColor = Color(0xFF38BDF8),
                 iconRes = R.drawable.chibi_grace
@@ -186,8 +188,8 @@ fun ChibiMascotTutorialDialog(
                 partNumber = 2,
                 titleEn = "Part 2: FSL Camera & Detection Tips",
                 titleTl = "Bahagi 2: FSL Kamera at Tips sa Kamay",
-                subtitleEn = "Lighting tips, hand distance, mid-word typing & A–Z chart",
-                subtitleTl = "Tamang ilaw, distansya ng kamay, pag-edit ng titik at A–Z chart",
+                subtitleEn = "Lighting tips, hand distance, stability, mid-word typing & A–Z chart",
+                subtitleTl = "Tamang ilaw, distansya ng kamay, pag-edit sa gitna ng salita at A–Z chart",
                 badgeText = "PART 2",
                 accentColor = Color(0xFF10B981),
                 iconRes = R.drawable.chibi_kian_explain
@@ -196,8 +198,8 @@ fun ChibiMascotTutorialDialog(
                 partNumber = 3,
                 titleEn = "Part 3: AI Translate & Quick Words",
                 titleTl = "Bahagi 3: AI Pagsasalin at Quick Words",
-                subtitleEn = "Output box, Qwen 2.5 sentences, Quick Words & Voice TTS",
-                subtitleTl = "Output box, Qwen 2.5 na pangungusap, Quick Words at Boses",
+                subtitleEn = "Frequently used words, Output box, Qwen 2.5 sentences & Voice TTS",
+                subtitleTl = "Madalas gamitin na salita, Output box, Qwen 2.5 at Boses",
                 badgeText = "PART 3",
                 accentColor = Color(0xFFF59E0B),
                 iconRes = R.drawable.chibi_grace_point
@@ -206,8 +208,8 @@ fun ChibiMascotTutorialDialog(
                 partNumber = 4,
                 titleEn = "Part 4: Emergency SOS (ft. Shouko)",
                 titleTl = "Bahagi 4: Saklolo SOS (kasama si Shouko)",
-                subtitleEn = "Special Guest Shouko explains 1-tap loud SOS broadcasts",
-                subtitleTl = "Ipapaliwanag ni Shouko ang 1-tap malakas na boses sa emergency",
+                subtitleEn = "Special Guest Shouko highlights each 1-tap SOS broadcast card",
+                subtitleTl = "Ipapaliwanag ni Shouko ang bawat 1-tap SOS card sa emergency",
                 badgeText = "PART 4 • SOS",
                 accentColor = Color(0xFFF472B6),
                 iconRes = R.drawable.chibi_shouko
@@ -216,8 +218,8 @@ fun ChibiMascotTutorialDialog(
                 partNumber = 5,
                 titleEn = "Part 5: Offline AI & Custom Settings",
                 titleTl = "Bahagi 5: Offline AI Model at Settings",
-                subtitleEn = "Extracting 350 MB AI model, Text Size Scale, Fonts & Sounds",
-                subtitleTl = "Pag-extract ng 350 MB AI model, Laki ng Teksto, Font at Tunog",
+                subtitleEn = "Project Nexus badge, Text Size Scale, Fonts, Sounds & 350 MB AI",
+                subtitleTl = "Project Nexus badge, Laki ng Teksto, Font, Tunog at 350 MB AI",
                 badgeText = "PART 5",
                 accentColor = Color(0xFF818CF8),
                 iconRes = R.drawable.chibi_kian_thumbs
@@ -226,18 +228,18 @@ fun ChibiMascotTutorialDialog(
                 partNumber = 6,
                 titleEn = "Part 6: Thank You & Team Inbox",
                 titleTl = "Bahagi 6: Pasasalamat at Team Inbox",
-                subtitleEn = "Farewell from Grace, Kian & Shouko + send team feedback",
-                subtitleTl = "Pasasalamat nina Grace, Kian at Shouko + magpadala ng feedback",
+                subtitleEn = "Special Thank You from Grace, Shouko & Kian + Team Inbox",
+                subtitleTl = "Taos-pusong pasasalamat nina Grace, Shouko at Kian + Team Inbox",
                 badgeText = "PART 6",
                 accentColor = Color(0xFFFBBF24),
-                iconRes = R.drawable.chibi_grace_happy
+                iconRes = R.drawable.chibi_grace_thankyou
             )
         )
     }
 
     val allDialogues = remember {
         listOf(
-            // ==================== PART 1: WELCOME & WHAT IWANI IS FOR ====================
+            // ==================== PART 1: WELCOME & HOME WORKSPACE (7 TURNS) ====================
             WalkthroughDialogueLine(
                 partNumber = 1,
                 speaker = VnSpeaker.GRACE,
@@ -245,10 +247,8 @@ fun ChibiMascotTutorialDialog(
                 rightSpriteRes = R.drawable.chibi_kian,
                 activeSide = "LEFT",
                 backgroundRoute = "home",
-                focusZone = SpotlightFocusZone.CENTER_HERO,
-                focusLabelEn = "HERE • iWani Home Workspace",
-                focusLabelTl = "DITO • Home Screen ng iWani",
-                textEn = "Hi there! My name is Grace, and I'm one of the developers of Project Nexus from ICCT Colleges. Welcome to iWani!",
+                cutout = null,
+                textEn = "Hi there! My name is Grace, and I'm one of the developers of Project Nexus from ICCT Colleges. Welcome to our official iWani walkthrough!",
                 textTl = "Kumusta po! Ang pangalan ko ay Grace, at isa ako sa mga developer ng Project Nexus mula sa ICCT Colleges. Maligayang pagdating sa iWani!"
             ),
             WalkthroughDialogueLine(
@@ -258,11 +258,9 @@ fun ChibiMascotTutorialDialog(
                 rightSpriteRes = R.drawable.chibi_kian_thumbs,
                 activeSide = "RIGHT",
                 backgroundRoute = "home",
-                focusZone = SpotlightFocusZone.CENTER_HERO,
-                focusLabelEn = "HERE • Bridging Deaf & Hearing Communities",
-                focusLabelTl = "DITO • Tulay sa Komunikasyon ng Bingi at Nakakarinig",
-                textEn = "And I'm Kian, also part of Project Nexus and a developer of this app! We built iWani so Deaf and mute Filipinos can communicate effortlessly using Filipino Sign Language (FSL) and offline AI.",
-                textTl = "At ako naman si Kian, bahagi rin ng Project Nexus at developer ng app na ito! Binuo namin ang iWani upang madaling makipag-usap ang mga Bingi at pipi gamit ang Filipino Sign Language (FSL) at offline AI."
+                cutout = null,
+                textEn = "And I'm Kian, QA and developer of Project Nexus! Together with our Ascendens team, we built iWani so Deaf and mute Filipinos can communicate naturally with anyone using Filipino Sign Language and offline AI.",
+                textTl = "At ako naman si Kian, QA at developer ng Project Nexus! Kasama ang aming Ascendens team, binuo namin ang iWani upang madaling makipag-usap ang mga Bingi at pipi gamit ang Filipino Sign Language at offline AI."
             ),
             WalkthroughDialogueLine(
                 partNumber = 1,
@@ -271,14 +269,45 @@ fun ChibiMascotTutorialDialog(
                 rightSpriteRes = R.drawable.chibi_kian,
                 activeSide = "LEFT",
                 backgroundRoute = "home",
-                focusZone = SpotlightFocusZone.TOP_BAR,
-                focusLabelEn = "HERE • Top Bar: EN/TL Flags & Theme Wave Toggle",
-                focusLabelTl = "DITO • Top Bar: Watawat ng EN/TL at Theme Toggle",
-                textEn = "Look up at the Top Bar! You can tap the USA Flag (EN) or Philippine Flag (TL) anytime to switch the whole app between English and Tagalog, or tap the Sun/Moon icon for a smooth wave transition.",
-                textTl = "Tingnan ang Top Bar sa itaas! Maaari mong pindutin ang watawat ng USA (EN) o Pilipinas (TL) anumang oras upang magpalit sa English o Tagalog, o ang Sun/Moon icon para sa wave theme transition."
+                cutout = SpotlightCutoutSpec(topFraction = 0.038f, bottomFraction = 0.115f),
+                textEn = "First, look at the highlighted Top Bar above! You can tap the USA Flag (EN) or Philippine Flag (TL) anytime to switch the whole app between English and Tagalog, or tap the Sun/Moon button for a smooth wave theme transition.",
+                textTl = "Una, tingnan ang naka-highlight na Top Bar sa itaas! Pindutin lang ang watawat ng USA (EN) o Pilipinas (TL) upang magpalit sa English o Tagalog, o ang Sun/Moon icon para sa wave theme transition."
+            ),
+            WalkthroughDialogueLine(
+                partNumber = 1,
+                speaker = VnSpeaker.KIAN,
+                leftSpriteRes = R.drawable.chibi_grace,
+                rightSpriteRes = R.drawable.chibi_kian_explain,
+                activeSide = "RIGHT",
+                backgroundRoute = "home",
+                cutout = SpotlightCutoutSpec(topFraction = 0.19f, bottomFraction = 0.405f),
+                textEn = "Right below the greeting is our Hero Showcase! You can tap it to cycle through real-world stories showing how iWani helps in classrooms, hospitals, barangay halls, and daily conversations.",
+                textTl = "Sa ibaba naman ng pagbati ay ang ating Hero Showcase! Pwede mo itong pindutin upang makita kung paano nakakatulong ang iWani sa paaralan, ospital, barangay, at araw-araw na usapan."
+            ),
+            WalkthroughDialogueLine(
+                partNumber = 1,
+                speaker = VnSpeaker.GRACE,
+                leftSpriteRes = R.drawable.chibi_grace_happy,
+                rightSpriteRes = R.drawable.chibi_kian_explain,
+                activeSide = "LEFT",
+                backgroundRoute = "home",
+                cutout = SpotlightCutoutSpec(topFraction = 0.41f, bottomFraction = 0.505f),
+                textEn = "This banner right here is our Interactive Walkthrough & Team Inbox bar! Whenever you want to replay this guide or send a message to our developers, you can tap it right from the Home screen.",
+                textTl = "Ang banner na ito ay ang ating Interactive Walkthrough at Team Inbox bar! Kung gusto mong ulitin ang gabay na ito o magpadala ng mensahe sa aming team, pindutin lang ito sa Home screen."
+            ),
+            WalkthroughDialogueLine(
+                partNumber = 1,
+                speaker = VnSpeaker.KIAN,
+                leftSpriteRes = R.drawable.chibi_grace_point,
+                rightSpriteRes = R.drawable.chibi_kian_thumbs,
+                activeSide = "RIGHT",
+                backgroundRoute = "home",
+                cutout = SpotlightCutoutSpec(topFraction = 0.525f, bottomFraction = 0.72f),
+                textEn = "And here is our Core Workspace! The first two cards open the live 3D FSL Camera and the AI Translate screen. Let's head into Part 2 and test the FSL Camera together!",
+                textTl = "At narito ang ating Core Workspace! Ang unang dalawang card ay para sa live 3D FSL Kamera at AI Pagsasalin. Dumako na tayo sa Bahagi 2 upang subukan ang FSL Kamera!"
             ),
 
-            // ==================== PART 2: FSL CAMERA & HAND DETECTION TIPS ====================
+            // ==================== PART 2: FSL CAMERA & HAND DETECTION TIPS (7 TURNS) ====================
             WalkthroughDialogueLine(
                 partNumber = 2,
                 speaker = VnSpeaker.KIAN,
@@ -286,11 +315,9 @@ fun ChibiMascotTutorialDialog(
                 rightSpriteRes = R.drawable.chibi_kian_explain,
                 activeSide = "RIGHT",
                 backgroundRoute = "camera",
-                focusZone = SpotlightFocusZone.CAMERA_VIEWFINDER,
-                focusLabelEn = "HERE • Live 26-Letter 3D Hand Tracking Viewfinder",
-                focusLabelTl = "DITO • Live 26-Titik 3D Hand Tracking Kamera",
-                textEn = "Now we're inside the FSL Camera! Before you start signing, here is our #1 developer tip: make sure your place is well-lit so the camera can clearly see your fingers and knuckles.",
-                textTl = "Nandito na tayo sa FSL Kamera! Bago mag-senyas, narito ang aming #1 tip: siguraduhing maliwanag ang iyong paligid upang malinaw na makita ng kamera ang bawat daliri ng iyong kamay."
+                cutout = SpotlightCutoutSpec(topFraction = 0.115f, bottomFraction = 0.21f),
+                textEn = "Welcome to Part 2: the FSL Camera! Look at the top status bar of the camera: the left pill shows live hand scanning status, while the two buttons on the right let you open the A–Z Alphabet Chart or flip between front and back cameras.",
+                textTl = "Narito na tayo sa Bahagi 2: ang FSL Kamera! Sa itaas na bahagi, makikita ang status ng pag-scan ng kamay, habang ang dalawang button sa kanan ay para sa A–Z Alphabet Chart at pag-flip ng front o back camera."
             ),
             WalkthroughDialogueLine(
                 partNumber = 2,
@@ -299,11 +326,9 @@ fun ChibiMascotTutorialDialog(
                 rightSpriteRes = R.drawable.chibi_kian_explain,
                 activeSide = "LEFT",
                 backgroundRoute = "camera",
-                focusZone = SpotlightFocusZone.CAMERA_VIEWFINDER,
-                focusLabelEn = "TIP • Keep Hand 1–2 Feet Away (Not Too Close!)",
-                focusLabelTl = "TIP • Huwag Ilapit Nang Sobra ang Kamay sa Kamera!",
-                textEn = "That's right! Also, don't place your hand too close to the camera lens. Keep your hand centered inside the frame at a comfortable distance so all 21 hand landmarks stay visible.",
-                textTl = "Tama iyan! Huwag din ilapit nang sobra ang iyong kamay sa lente ng kamera. Panatilihin ito sa gitna sa tamang distansya upang makita nang buo ang iyong kamay at mga daliri."
+                cutout = SpotlightCutoutSpec(topFraction = 0.20f, bottomFraction = 0.54f),
+                textEn = "Before signing inside the viewfinder, here is Tip #1: make sure your place is well-lit! Good lighting in front of your hand helps MediaPipe track all 21 3D finger joints with 97.4% accuracy.",
+                textTl = "Bago mag-senyas sa harap ng kamera, narito ang Tip #1: siguraduhing maliwanag ang iyong lugar! Kapag maliwanag, kitang-kita ng AI ang lahat ng 21 finger joints ng iyong kamay."
             ),
             WalkthroughDialogueLine(
                 partNumber = 2,
@@ -312,27 +337,45 @@ fun ChibiMascotTutorialDialog(
                 rightSpriteRes = R.drawable.chibi_kian_thumbs,
                 activeSide = "RIGHT",
                 backgroundRoute = "camera",
-                focusZone = SpotlightFocusZone.FORMED_WORD_BOX,
-                focusLabelEn = "HERE • Tap Between Letters to Type or Edit Mid-Word!",
-                focusLabelTl = "DITO • Pindutin sa Pagitan ng mga Titik para Mag-edit!",
-                textEn = "Hold a hand sign steady for a second to lock in the letter! And if you miss a letter in the middle of a word, just tap directly between the letters in the 'Formed Word' box or use the ◀ ▶ arrows to type or delete mid-word!",
-                textTl = "Panatilihing steady ang senyas nang isang segundo para ma-lock ang titik! At kung may kulang na titik sa gitna ng salita, pindutin lang sa pagitan ng mga titik sa 'Formed Word' box o gamitin ang ◀ ▶ arrows para mag-type!"
+                cutout = SpotlightCutoutSpec(topFraction = 0.20f, bottomFraction = 0.54f),
+                textEn = "And Tip #2: don't place your hand too close to the camera lens! Keep your hand centered about 1 to 2 feet (30 to 50 cm) away from the phone so your entire palm and fingertips stay inside the frame.",
+                textTl = "At Tip #2: huwag ilapit nang sobra ang iyong kamay sa lente ng kamera! Panatilihin ang kamay sa gitna na may layong 1 hanggang 2 talampakan upang makita nang buo ang palad at mga daliri."
             ),
             WalkthroughDialogueLine(
                 partNumber = 2,
                 speaker = VnSpeaker.GRACE,
                 leftSpriteRes = R.drawable.chibi_grace_happy,
+                rightSpriteRes = R.drawable.chibi_kian,
+                activeSide = "LEFT",
+                backgroundRoute = "camera",
+                cutout = SpotlightCutoutSpec(topFraction = 0.20f, bottomFraction = 0.54f),
+                textEn = "Tip #3: once you form a letter from A to Z, hold your hand steady for about one second! That fills the Stability Meter and prevents accidental letters while your fingers are moving between signs.",
+                textTl = "Tip #3: kapag naka-porma na ang iyong kamay ng titik A hanggang Z, panatilihing steady ito nang isang segundo! Pupunuan nito ang Stability Meter upang maiwasan ang maling titik habang gumagalaw ang daliri."
+            ),
+            WalkthroughDialogueLine(
+                partNumber = 2,
+                speaker = VnSpeaker.KIAN,
+                leftSpriteRes = R.drawable.chibi_grace,
+                rightSpriteRes = R.drawable.chibi_kian_explain,
+                activeSide = "RIGHT",
+                backgroundRoute = "camera",
+                cutout = SpotlightCutoutSpec(topFraction = 0.58f, bottomFraction = 0.74f),
+                textEn = "Now look at the highlighted 'Formed Word' box! What if you spelled 'TUBG' and forgot the letter 'I' in the middle? You don't have to erase the whole word!",
+                textTl = "Ngayon, tingnan ang naka-highlight na 'Formed Word' box! Paano kung na-spell mo ay 'TUBG' at nakalimutan ang titik 'I' sa gitna? Hindi mo na kailangang burahin ang buong salita!"
+            ),
+            WalkthroughDialogueLine(
+                partNumber = 2,
+                speaker = VnSpeaker.GRACE,
+                leftSpriteRes = R.drawable.chibi_grace_point,
                 rightSpriteRes = R.drawable.chibi_kian_thumbs,
                 activeSide = "LEFT",
                 backgroundRoute = "camera",
-                focusZone = SpotlightFocusZone.ALPHABET_CHART_BTN,
-                focusLabelEn = "HERE • Full-Portrait A–Z FSL Alphabet Chart",
-                focusLabelTl = "DITO • Full-Portrait A–Z FSL Alphabet Chart",
-                textEn = "Forgot how a letter looks in Filipino Sign Language? Tap the 'Chart' button on the camera screen (or the FSL Alphabet tile on Home) to open our enlarged Full-Portrait A–Z guide with pinch-to-zoom!",
-                textTl = "Nakalimutan kung paano i-senyas ang isang titik? Pindutin ang 'Chart' button sa kamera (o sa Home screen) upang buksan ang malaking Full-Portrait A–Z chart na pwedeng i-zoom!"
+                cutout = SpotlightCutoutSpec(topFraction = 0.58f, bottomFraction = 0.74f),
+                textEn = "Exactly! Just tap directly between the letters inside the box (or use the ◀ and ▶ cursor arrows) to type with your keyboard or sign a new letter right into the middle of the word!",
+                textTl = "Tama! Pindutin lang sa pagitan ng mga titik sa loob ng box (o gamitin ang ◀ at ▶ arrows) upang mag-type sa keyboard o magsingit ng bagong senyas sa gitna ng salita!"
             ),
 
-            // ==================== PART 3: AI TRANSLATE & QUICK WORDS ====================
+            // ==================== PART 3: AI TRANSLATE & QUICK WORDS (5 TURNS) ====================
             WalkthroughDialogueLine(
                 partNumber = 3,
                 speaker = VnSpeaker.GRACE,
@@ -340,11 +383,9 @@ fun ChibiMascotTutorialDialog(
                 rightSpriteRes = R.drawable.chibi_kian,
                 activeSide = "LEFT",
                 backgroundRoute = "translate",
-                focusZone = SpotlightFocusZone.TRANSLATE_OUTPUT_BOX,
-                focusLabelEn = "HERE • Output Box & AI Natural Sentence Converter",
-                focusLabelTl = "DITO • Output Box at AI Tagabuo ng Pangungusap",
-                textEn = "Welcome to Part 3: the Translate screen! When you sign root words like 'TUBIG' or 'PAGKAIN', they appear in the Output box at the top.",
-                textTl = "Narito ang Bahagi 3: ang Translate screen! Kapag nag-senyas ka o pumili ng mga salita tulad ng 'TUBIG' o 'PAGKAIN', lalabas ito sa Output box sa itaas."
+                cutout = SpotlightCutoutSpec(topFraction = 0.195f, bottomFraction = 0.305f),
+                textEn = "Welcome to Part 3: Communication & Translation! At the top, we organized everyday situations into quick categories, starting with '★ Frequently Used' right at the front.",
+                textTl = "Narito ang Bahagi 3: Komunikasyon at Pagsasalin! Sa itaas, naka-ayos ang mga kategorya simula sa '★ Madalas Gamitin' para sa pinakamabilis na pakikipag-usap."
             ),
             WalkthroughDialogueLine(
                 partNumber = 3,
@@ -353,14 +394,45 @@ fun ChibiMascotTutorialDialog(
                 rightSpriteRes = R.drawable.chibi_kian_explain,
                 activeSide = "RIGHT",
                 backgroundRoute = "translate",
-                focusZone = SpotlightFocusZone.QUICK_WORDS_GRID,
-                focusLabelEn = "HERE • Frequently Used Quick Words & Categories",
-                focusLabelTl = "DITO • Madalas Gamitin na Quick Words at Kategorya",
-                textEn = "Need to reply fast? Tap any chip under '★ Frequently Used' — like Pagkain, Tubig, Bili, Pahinga, Tulong, Salamat, or Magkano — and our offline Qwen 2.5 AI turns it into a polite Tagalog or English sentence and speaks it out loud!",
-                textTl = "Kailangan ng mabilis na sagot? Pumili lang sa '★ Madalas Gamitin' — tulad ng Pagkain, Tubig, Bili, Pahinga, Tulong, Salamat, o Magkano — at gagawin itong magalang na pangungusap ng AI at ipaparinig sa boses!"
+                cutout = SpotlightCutoutSpec(topFraction = 0.305f, bottomFraction = 0.525f),
+                textEn = "Look at the Quick Words chips highlighted here — Pagkain (Food), Tubig (Water), Bili (Buy), Pahinga (Rest), Tulong (Help), Salamat, Magkano, and Saan ang CR! Tap any chip when you need an instant reply.",
+                textTl = "Tingnan ang mga Quick Words chips na naka-highlight dito — Pagkain, Tubig, Bili, Pahinga, Tulong, Salamat, Magkano, at Saan ang CR! Pindutin lang ang alinmang salita kapag kailangan ng agarang sagot."
+            ),
+            WalkthroughDialogueLine(
+                partNumber = 3,
+                speaker = VnSpeaker.GRACE,
+                leftSpriteRes = R.drawable.chibi_grace_happy,
+                rightSpriteRes = R.drawable.chibi_kian_explain,
+                activeSide = "LEFT",
+                backgroundRoute = "translate",
+                cutout = SpotlightCutoutSpec(topFraction = 0.525f, bottomFraction = 0.655f),
+                textEn = "Below the chips is the 'Output' box! Whether you signed words from the camera, tapped a Quick Word chip, or typed multiple words like 'MASAKIT ULO GAMOT', they appear right here.",
+                textTl = "Sa ibaba ng mga chips ay ang 'Output' box! Mula man sa kamera, Quick Word chip, o tinype na mga salita tulad ng 'MASAKIT ULO GAMOT', dito ito lalabas."
+            ),
+            WalkthroughDialogueLine(
+                partNumber = 3,
+                speaker = VnSpeaker.KIAN,
+                leftSpriteRes = R.drawable.chibi_grace_point,
+                rightSpriteRes = R.drawable.chibi_kian_thumbs,
+                activeSide = "RIGHT",
+                backgroundRoute = "translate",
+                cutout = SpotlightCutoutSpec(topFraction = 0.655f, bottomFraction = 0.875f),
+                textEn = "And inside the AI Translation Card below it, our offline Qwen 2.5 engine turns those short words into a complete, polite Tagalog or English sentence! Tap 'Speak Out Loud' to broadcast it in a clear voice.",
+                textTl = "At sa AI Translation Card sa ibaba nito, ginagawa itong buo at magalang na pangungusap sa Tagalog o English ng ating offline Qwen 2.5 AI! Pindutin ang 'Iparinig sa Boses' upang iparinig ito."
             ),
 
-            // ==================== PART 4: EMERGENCY SOS (FT. SHOUKO) ====================
+            // ==================== PART 4: EMERGENCY SOS — FT. SHOUKO (SPECIAL GUEST) (6 TURNS) ====================
+            WalkthroughDialogueLine(
+                partNumber = 4,
+                speaker = VnSpeaker.GRACE,
+                leftSpriteRes = R.drawable.chibi_shouko,
+                rightSpriteRes = R.drawable.chibi_grace_happy,
+                activeSide = "RIGHT",
+                backgroundRoute = "sos",
+                cutout = null,
+                textEn = "For Part 4, we invited a very special friend to help us explain the Emergency SOS feature! Everyone, please welcome our Special Guest, Shouko!",
+                textTl = "Para sa Bahagi 4, nag-imbita kami ng isang espesyal na kaibigan upang ipaliwanag ang Emergency SOS feature! Salubungin natin ang ating Special Guest, si Shouko!"
+            ),
             WalkthroughDialogueLine(
                 partNumber = 4,
                 speaker = VnSpeaker.SHOUKO,
@@ -368,81 +440,135 @@ fun ChibiMascotTutorialDialog(
                 rightSpriteRes = R.drawable.chibi_grace,
                 activeSide = "LEFT",
                 backgroundRoute = "sos",
-                focusZone = SpotlightFocusZone.SOS_CARDS,
-                focusLabelEn = "HERE • 1-Tap Emergency SOS Voice Broadcast Cards",
-                focusLabelTl = "DITO • 1-Tap Emergency SOS na Malakas na Boses",
-                textEn = "Hello! I'm Shouko. In Part 4, I want to show you the Emergency SOS tab. If you ever face a medical emergency, danger, or get lost, just tap any red SOS card once.",
-                textTl = "Kumusta po! Ako si Shouko. Sa Bahagi 4, ipapakita ko sa inyo ang Emergency SOS tab. Kapag may biglaang panganib, sakit, o naliligaw ka, pindutin lang nang isang beses ang alinmang SOS card."
+                cutout = SpotlightCutoutSpec(topFraction = 0.21f, bottomFraction = 0.342f),
+                textEn = "Hello everyone! I'm Shouko. In an emergency, signing or typing can take too much time. Look at the first highlighted card above: 'Emergency SOS (Urgent Help)' — tapping it once immediately speaks out loud to call people nearby for urgent assistance!",
+                textTl = "Kumusta po sa inyong lahat! Ako si Shouko. Sa oras ng kagipitan, mahalaga ang bawat segundo. Tingnan ang unang card na naka-highlight sa itaas: 'Emergency SOS (Urgent Help)' — sa isang pindot, malakas na magsasalita ang phone upang humingi ng tulong!"
+            ),
+            WalkthroughDialogueLine(
+                partNumber = 4,
+                speaker = VnSpeaker.GRACE,
+                leftSpriteRes = R.drawable.chibi_shouko_notebook,
+                rightSpriteRes = R.drawable.chibi_grace_point,
+                activeSide = "RIGHT",
+                backgroundRoute = "sos",
+                cutout = SpotlightCutoutSpec(topFraction = 0.342f, bottomFraction = 0.472f),
+                textEn = "And look at the second card right below it: 'Medical Emergency / Hospital'! If you feel dizzy, injured, or unwell, one tap announces that you are Deaf and need a doctor or ambulance right away.",
+                textTl = "At tingnan ang pangalawang card sa ibaba nito: 'Medical Emergency / Hospital'! Kung ikaw ay nahihilo, nasugatan, o may sakit, ipapahayag agad nito na kailangan mo ng doktor o ambulansya."
             ),
             WalkthroughDialogueLine(
                 partNumber = 4,
                 speaker = VnSpeaker.SHOUKO,
                 leftSpriteRes = R.drawable.chibi_shouko_happy,
-                rightSpriteRes = R.drawable.chibi_grace_happy,
+                rightSpriteRes = R.drawable.chibi_grace,
                 activeSide = "LEFT",
                 backgroundRoute = "sos",
-                focusZone = SpotlightFocusZone.SOS_CARDS,
-                focusLabelEn = "HERE • Loud Voice Broadcast + Reactive Audio Wave",
-                focusLabelTl = "DITO • Agarang Malakas na Boses + Audio Wave",
-                textEn = "Your phone will immediately speak out loud in a clear voice to call a Doctor, Police/Barangay Tanod, ask for Directions, or contact your Family — even without internet!",
-                textTl = "Agad na magsasalita nang malakas at malinaw ang iyong phone upang humingi ng Doktor, Pulis/Barangay Tanod, magtanong ng Direksyon, o tumawag sa Pamilya — kahit walang internet!"
+                cutout = SpotlightCutoutSpec(topFraction = 0.472f, bottomFraction = 0.605f),
+                textEn = "Now look at this third card in the center: 'I Am Lost / Need Directions'! If you ever get lost while commuting or in an unfamiliar place, tapping this card politely asks bystanders to help guide you safely.",
+                textTl = "Ngayon ay tingnan ang pangatlong card sa gitna: 'I Am Lost / Need Directions'! Kapag ikaw ay naligaw sa biyahe o sa hindi pamilyar na lugar, magalang itong hihingi ng tulong at direksyon sa mga tao sa paligid."
             ),
             WalkthroughDialogueLine(
                 partNumber = 4,
-                speaker = VnSpeaker.GRACE,
+                speaker = VnSpeaker.KIAN,
                 leftSpriteRes = R.drawable.chibi_shouko_happy,
-                rightSpriteRes = R.drawable.chibi_grace_point,
+                rightSpriteRes = R.drawable.chibi_kian_explain,
                 activeSide = "RIGHT",
                 backgroundRoute = "sos",
-                focusZone = SpotlightFocusZone.SOS_CARDS,
-                focusLabelEn = "TIP • Tap Card Again or Stop Button to Silence",
-                focusLabelTl = "TIP • Pindutin Muli o ang Stop Icon para Ihinto",
-                textEn = "Thank you so much for explaining the SOS feature, Shouko! And remember, you can tap the same card again or press the red Stop icon at the top-right to stop the voice broadcast anytime.",
-                textTl = "Maraming salamat sa pagpapaliwanag ng SOS feature, Shouko! At tandaan, maaari mong pindutin muli ang card o ang Stop icon sa itaas upang ihinto agad ang boses."
+                cutout = SpotlightCutoutSpec(topFraction = 0.605f, bottomFraction = 0.748f),
+                textEn = "We also added 'I Am Deaf (Communication Note)' right here! When you tap it, your phone tells the other person: 'Hello, I am deaf and I use sign language. Please write on paper or type on my phone so we can communicate.'",
+                textTl = "Idinagdag din namin ang 'I Am Deaf (Communication Note)' dito! Sinasabi nito sa kausap mo: 'Ako po ay bingi at gumagamit ng sign language. Pakisulat po sa papel o mag-type sa aking phone upang tayo ay magkaintindihan.'"
+            ),
+            WalkthroughDialogueLine(
+                partNumber = 4,
+                speaker = VnSpeaker.SHOUKO,
+                leftSpriteRes = R.drawable.chibi_shouko_notebook,
+                rightSpriteRes = R.drawable.chibi_grace_happy,
+                activeSide = "LEFT",
+                backgroundRoute = "sos",
+                cutout = SpotlightCutoutSpec(topFraction = 0.748f, bottomFraction = 0.885f),
+                textEn = "And at the bottom is 'Police / Barangay Tanod' for security help! While any SOS card is broadcasting, a glowing audio wave appears at the top — tap the card again or press Stop to silence it anytime.",
+                textTl = "At sa ibaba ay ang 'Police / Barangay Tanod' para sa seguridad! Habang nagsasalita ang SOS, may lalabas na audio wave sa itaas — pindutin lang muli ang card o ang Stop button upang ihinto ito."
             ),
 
-            // ==================== PART 5: OFFLINE AI & CUSTOM SETTINGS ====================
+            // ==================== PART 5: OFFLINE AI & CUSTOM SETTINGS (4 TURNS) ====================
             WalkthroughDialogueLine(
                 partNumber = 5,
                 speaker = VnSpeaker.KIAN,
                 leftSpriteRes = R.drawable.chibi_grace,
-                rightSpriteRes = R.drawable.chibi_kian_explain,
+                rightSpriteRes = R.drawable.chibi_kian_thumbs,
                 activeSide = "RIGHT",
                 backgroundRoute = "settings",
-                focusZone = SpotlightFocusZone.SETTINGS_CARDS,
-                focusLabelEn = "HERE • Font Style, Text Size Scale & Sound Studio",
-                focusLabelTl = "DITO • Estilo ng Font, Laki ng Teksto at Tunog",
-                textEn = "In Part 5, check out the Settings tab! Here you can change the app's Typeface, drag the 'Text Size Scale' (Laki ng Teksto) slider from 85% to 125% to resize all text live, and pick from 4 button click sounds!",
-                textTl = "Sa Bahagi 5, narito ang Settings tab! Pwede mong palitan ang Font ng buong app, i-adjust ang 'Laki ng Teksto' mula 85% hanggang 125%, at pumili sa 4 na tunog ng button!"
+                cutout = SpotlightCutoutSpec(topFraction = 0.115f, bottomFraction = 0.21f),
+                textEn = "Welcome to Part 5: Settings & Studio! Look at the metallic 'PROJECT NEXUS' button at the top-right: tapping it opens our About Project Nexus page with the complete Ascendens team roster and ICCT Colleges credits.",
+                textTl = "Narito ang Bahagi 5: Mga Setting! Tingnan ang metallic na 'PROJECT NEXUS' button sa kanang itaas: kapag pinindot mo ito, bubukas ang About Project Nexus page kung saan makikita ang buong Ascendens team."
             ),
             WalkthroughDialogueLine(
                 partNumber = 5,
                 speaker = VnSpeaker.GRACE,
                 leftSpriteRes = R.drawable.chibi_grace_point,
+                rightSpriteRes = R.drawable.chibi_kian,
+                activeSide = "LEFT",
+                backgroundRoute = "settings",
+                cutout = SpotlightCutoutSpec(topFraction = 0.21f, bottomFraction = 0.495f),
+                textEn = "In the 'Appearance & Language' card highlighted here, you can toggle Dark Mode (Midnight Navy) with its portfolio wave transition, or switch between English (US) and Tagalog (PH).",
+                textTl = "Sa 'Hitsura at Wika' card na naka-highlight dito, maaari mong i-toggle ang Dark Mode (Midnight Navy) na may wave transition, o magpalit sa pagitan ng English (US) at Tagalog (PH)."
+            ),
+            WalkthroughDialogueLine(
+                partNumber = 5,
+                speaker = VnSpeaker.KIAN,
+                leftSpriteRes = R.drawable.chibi_grace_point,
+                rightSpriteRes = R.drawable.chibi_kian_explain,
+                activeSide = "RIGHT",
+                backgroundRoute = "settings",
+                cutout = SpotlightCutoutSpec(topFraction = 0.50f, bottomFraction = 0.88f),
+                textEn = "And inside 'Typography & Font Style', you can switch between 4 custom fonts and drag the 'Text Size Scale' (Laki ng Teksto) slider from 85% to 125% to resize every single text across the app live!",
+                textTl = "At sa loob ng 'Estilo at Laki ng Font', maaari kang pumili sa 4 na font at i-slide ang 'Laki ng Teksto' mula 85% hanggang 125% upang palakihin o paliitin ang lahat ng teksto sa buong app!"
+            ),
+            WalkthroughDialogueLine(
+                partNumber = 5,
+                speaker = VnSpeaker.GRACE,
+                leftSpriteRes = R.drawable.chibi_grace_happy,
                 rightSpriteRes = R.drawable.chibi_kian_thumbs,
                 activeSide = "LEFT",
                 backgroundRoute = "settings",
-                focusZone = SpotlightFocusZone.TOP_BAR,
-                focusLabelEn = "HERE • Tap 'PROJECT NEXUS' Badge or AI Model Manager",
-                focusLabelTl = "DITO • Pindutin ang 'PROJECT NEXUS' Badge o AI Model",
-                textEn = "You can also tap the metallic 'PROJECT NEXUS' badge to view our full Ascendens development team, or open 'Extracting AI Model' to manage your 350 MB offline neural engine!",
-                textTl = "Maaari mo ring pindutin ang 'PROJECT NEXUS' badge upang makita ang buong Ascendens team, o buksan ang 'Extracting AI Model' para sa 350 MB offline neural engine!"
+                cutout = null,
+                textEn = "Scroll down in Settings anytime to customize your Button Click Sound (Crystal Chime, Cyber Pulse, Soft Pop, or Tactile Click) and manage 'Extracting AI Model (Qwen 2.5)' for 100% offline translation!",
+                textTl = "Mag-scroll lang sa Settings upang pumili ng Tunog ng Button (Crystal Chime, Cyber Pulse, Soft Pop, o Tactile Click) at buksan ang 'Extracting AI Model (Qwen 2.5)' para sa 100% offline na pagsasalin!"
             ),
 
-            // ==================== PART 6: THANK YOU & TEAM INBOX ====================
+            // ==================== PART 6: THANK YOU & TEAM INBOX (3 TURNS) ====================
+            WalkthroughDialogueLine(
+                partNumber = 6,
+                speaker = VnSpeaker.GRACE,
+                leftSpriteRes = R.drawable.chibi_grace_happy,
+                rightSpriteRes = R.drawable.chibi_kian_thumbs,
+                activeSide = "LEFT",
+                backgroundRoute = "home",
+                cutout = null,
+                textEn = "You've completed the full iWani walkthrough! Remember, if you ever want to review just one specific section — like Camera tips or Emergency SOS — just tap the 'Part' menu at the top-left to jump straight to that Part.",
+                textTl = "Natapos mo na ang buong walkthrough ng iWani! Tandaan, kung gusto mong balikan ang isang partikular na bahagi — tulad ng Camera tips o Emergency SOS — pindutin lang ang 'Bahagi' menu sa kaliwang itaas."
+            ),
+            WalkthroughDialogueLine(
+                partNumber = 6,
+                speaker = VnSpeaker.KIAN,
+                leftSpriteRes = R.drawable.chibi_grace_happy,
+                rightSpriteRes = R.drawable.chibi_kian_thankyou,
+                activeSide = "RIGHT",
+                backgroundRoute = "home",
+                cutout = null,
+                textEn = "We poured our hearts into building Project Nexus at ICCT Colleges, and your feedback helps us make iWani even better for the Deaf community!",
+                textTl = "Buong puso naming binuo ang Project Nexus sa ICCT Colleges, at malaking tulong ang iyong feedback upang lalo pa naming mapaganda ang iWani para sa komunidad ng mga Bingi!"
+            ),
             WalkthroughDialogueLine(
                 partNumber = 6,
                 speaker = VnSpeaker.ALL_THREE,
-                leftSpriteRes = R.drawable.chibi_grace_happy,
-                rightSpriteRes = R.drawable.chibi_kian_thumbs,
-                centerSpriteRes = R.drawable.chibi_shouko_happy,
+                leftSpriteRes = R.drawable.chibi_grace_thankyou,
+                centerSpriteRes = R.drawable.chibi_shouko_thankyou,
+                rightSpriteRes = R.drawable.chibi_kian_thankyou,
                 activeSide = "ALL_THREE",
                 backgroundRoute = "home",
-                focusZone = SpotlightFocusZone.NONE,
-                focusLabelEn = "THANK YOU • Project Nexus (Ascendens • ICCT Colleges)",
-                focusLabelTl = "MARAMING SALAMAT • Project Nexus (Ascendens • ICCT)",
-                textEn = "Thank you so much for exploring iWani with us! You can replay any Part of this walkthrough anytime from Home or Settings. If you have feedback or suggestions for our team, tap 'Team Inbox' below!",
-                textTl = "Maraming-maraming salamat po sa pagsama sa amin sa iWani! Maaari mong balikan ang alinmang Bahagi (Part 1–6) sa Home o Settings. Kung may feedback ka para sa aming team, pindutin ang 'Team Inbox' sa ibaba!"
+                cutout = null,
+                textEn = "From Grace, Shouko, Kian, and the entire Project Nexus (Ascendens) team: thank you so much! Tap 'Team Inbox' below to send us your thoughts, or tap 'Finish' to start using iWani!",
+                textTl = "Mula kina Grace, Shouko, Kian, at sa buong Project Nexus (Ascendens) team: maraming-maraming salamat po! Pindutin ang 'Team Inbox' sa ibaba upang magpadala ng mensahe, o 'Tapos' upang gamitin na ang iWani!"
             )
         )
     }
@@ -463,6 +589,17 @@ fun ChibiMascotTutorialDialog(
         onNavigateToRoute(currentLine.backgroundRoute)
     }
 
+    // When cutout == null, apply real Gaussian blur to the background Scaffold;
+    // when cutout != null, keep the Scaffold sharp so the highlighted card inside the cutout is 100% clear!
+    LaunchedEffect(currentLine.cutout) {
+        onBlurBackgroundChange(currentLine.cutout == null)
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            onBlurBackgroundChange(false)
+        }
+    }
+
     // Typewriter effect state: reveals characters one by one
     var visibleCharCount by remember(currentIndex, isTagalog) { mutableIntStateOf(0) }
     val isTyping = visibleCharCount < fullDialogueText.length
@@ -470,7 +607,7 @@ fun ChibiMascotTutorialDialog(
     LaunchedEffect(currentIndex, isTagalog) {
         visibleCharCount = 0
         while (visibleCharCount < fullDialogueText.length) {
-            delay(18L)
+            delay(17L)
             visibleCharCount = (visibleCharCount + 1).coerceAtMost(fullDialogueText.length)
         }
     }
@@ -484,8 +621,7 @@ fun ChibiMascotTutorialDialog(
             cue = currentLine.speaker.voiceCue
         )
         puppetOffset.snapTo(0f)
-        // 3 lively puppet hops while starting to speak, then settle to static 0f
-        val hops = listOf(-16f, 0f, -12f, 0f, -7f, 0f)
+        val hops = listOf(-15f, 0f, -11f, 0f, -6f, 0f)
         for (target in hops) {
             puppetOffset.animateTo(
                 targetValue = target,
@@ -495,21 +631,20 @@ fun ChibiMascotTutorialDialog(
         puppetOffset.snapTo(0f)
     }
 
-    // Pulsing indicator for spotlight focus box & next-triangle
-    val infiniteTransition = rememberInfiniteTransition(label = "WalkthroughPulse")
-    val spotlightPulse by infiniteTransition.animateFloat(
-        initialValue = 0.96f,
-        targetValue = 1.03f,
+    // Subtle pulse for the cutout spotlight border
+    val infiniteTransition = rememberInfiniteTransition(label = "CutoutBorderPulse")
+    val borderGlowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1.0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
+            animation = tween(850, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "SpotlightPulse"
+        label = "BorderGlowAlpha"
     )
 
     fun handleAdvanceOrCompleteTyping() {
         if (isTyping) {
-            // First tap completes the typewriter line immediately
             visibleCharCount = fullDialogueText.length
         } else if (currentIndex < allDialogues.lastIndex) {
             UiSoundManager.playClick(context)
@@ -520,532 +655,575 @@ fun ChibiMascotTutorialDialog(
         }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
+    // Check if the cutout is in the lower half of the screen so the chibis shrink/tuck down out of its way!
+    val isLowCutout = currentLine.cutout != null && currentLine.cutout.bottomFraction > 0.56f
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                handleAdvanceOrCompleteTyping()
+            }
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
+        // ==================== 1. REAL APP CUTOUT SPOTLIGHT MASK ====================
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val cutout = currentLine.cutout
+            if (cutout == null) {
+                // Soft dark glass tint over the blurred background when introducing/thanking
+                drawRect(
+                    brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xBF040814),
-                            Color(0xCC070E20),
-                            Color(0xEB050914)
+                            Color(0x99040814),
+                            Color(0xB3060D1F),
+                            Color(0xD9050914)
                         )
                     )
                 )
-                // Tapping anywhere on the walkthrough advances the dialogue (or finishes typing first)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) {
-                    handleAdvanceOrCompleteTyping()
+            } else {
+                val left = size.width * cutout.startFraction
+                val top = size.height * cutout.topFraction
+                val right = size.width * cutout.endFraction
+                val bottom = size.height * cutout.bottomFraction
+                val radiusPx = cutout.cornerRadiusDp.dp.toPx()
+
+                val cutoutPath = Path().apply {
+                    addRoundRect(
+                        RoundRect(
+                            rect = Rect(left, top, right, bottom),
+                            cornerRadius = CornerRadius(radiusPx, radiusPx)
+                        )
+                    )
                 }
-        ) {
-            // ==================== 1. SPOTLIGHT FOCUS OVERLAY ("HERE • ...") ====================
-            if (currentLine.focusZone != SpotlightFocusZone.NONE) {
-                SpotlightFocusHighlight(
-                    zone = currentLine.focusZone,
-                    label = if (isTagalog) currentLine.focusLabelTl else currentLine.focusLabelEn,
-                    accentColor = currentLine.speaker.accentColor,
-                    pulseScale = spotlightPulse
+
+                // Draw the dark frosted mask ONLY OUTSIDE the cutout window!
+                // Inside the cutout window is 100% untouched, bright, sharp real app UI!
+                clipPath(cutoutPath, clipOp = ClipOp.Difference) {
+                    drawRect(color = Color(0xE0040916))
+
+                    // Soft diffused outer halo rings around the cutout so the surrounding edge feels blurred
+                    for (ring in 1..4) {
+                        val expand = (ring * 7).dp.toPx()
+                        drawRoundRect(
+                            color = currentLine.speaker.accentColor.copy(alpha = 0.05f * (5 - ring)),
+                            topLeft = Offset(left - expand, top - expand),
+                            size = Size((right - left) + expand * 2f, (bottom - top) + expand * 2f),
+                            cornerRadius = CornerRadius(radiusPx + expand, radiusPx + expand),
+                            style = Stroke(width = 6.dp.toPx())
+                        )
+                    }
+                }
+
+                // Crisp glowing frame around the clear cutout window
+                drawRoundRect(
+                    color = currentLine.speaker.accentColor.copy(alpha = borderGlowAlpha),
+                    topLeft = Offset(left, top),
+                    size = Size(right - left, bottom - top),
+                    cornerRadius = CornerRadius(radiusPx, radiusPx),
+                    style = Stroke(width = 2.8.dp.toPx())
                 )
             }
+        }
 
-            // ==================== 2. TOP BAR: PART SELECTOR (LEFT) + CHAT LOG & SKIP (RIGHT) ====================
-            Row(
+        // ==================== 2. TOP BAR: PART SELECTOR (LEFT) + CHAT LOG & SKIP (RIGHT) ====================
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 14.dp, vertical = 8.dp)
+                .align(Alignment.TopCenter),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Part Selector Pill (Allows jumping to Part 1..6 anytime!)
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = Color(0xF00B1326),
+                border = BorderStroke(1.2.dp, currentPartInfo.accentColor.copy(alpha = 0.85f)),
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-                    .align(Alignment.TopCenter),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .weight(1f, fill = false)
+                    .padding(end = 8.dp)
+                    .interactiveBounceClick { showPartsSheet = true }
             ) {
-                // Part Selector Pill (Allows jumping to Part 1..6 anytime!)
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.FormatListBulleted,
+                        contentDescription = "Select Tutorial Part",
+                        tint = currentPartInfo.accentColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = if (isTagalog) currentPartInfo.titleTl else currentPartInfo.titleEn,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier
+                            .widthIn(max = 175.dp)
+                            .autoSlideIfOverflow()
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = null,
+                        tint = currentPartInfo.accentColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // Top-Right Action Pills: Chat Log + Skip
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Surface(
                     shape = RoundedCornerShape(50),
-                    color = Color(0xE60F172A),
-                    border = BorderStroke(1.2.dp, currentPartInfo.accentColor.copy(alpha = 0.8f)),
-                    modifier = Modifier
-                        .weight(1f, fill = false)
-                        .padding(end = 8.dp)
-                        .interactiveBounceClick { showPartsSheet = true }
+                    color = Color(0xF00B1326),
+                    border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.75f)),
+                    modifier = Modifier.interactiveBounceClick { showChatLogModal = true }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.FormatListBulleted,
-                            contentDescription = "Select Tutorial Part",
-                            tint = currentPartInfo.accentColor,
-                            modifier = Modifier.size(16.dp)
+                            imageVector = Icons.Default.History,
+                            contentDescription = "Chat Log",
+                            tint = Color(0xFF38BDF8),
+                            modifier = Modifier.size(15.dp)
                         )
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(5.dp))
                         Text(
-                            text = if (isTagalog) currentPartInfo.titleTl else currentPartInfo.titleEn,
+                            text = "Log",
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color.White,
+                            color = Color(0xFFE2E8F0),
                             maxLines = 1,
-                            softWrap = false,
-                            modifier = Modifier
-                                .widthIn(max = 175.dp)
-                                .autoSlideIfOverflow()
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = null,
-                            tint = currentPartInfo.accentColor,
-                            modifier = Modifier.size(18.dp)
+                            softWrap = false
                         )
                     }
                 }
 
-                // Top-Right Action Pills: Chat Log + Skip
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = Color(0xF01E293B),
+                    border = BorderStroke(1.dp, Color(0xFF475569)),
+                    modifier = Modifier.interactiveBounceClick { onDismiss() }
                 ) {
-                    // Chat Log Button (Top Right)
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = Color(0xE60F172A),
-                        border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.7f)),
-                        modifier = Modifier.interactiveBounceClick { showChatLogModal = true }
+                    Row(
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Text(
+                            text = if (isTagalog) "Laktawan" else "Skip",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFE2E8F0),
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Skip Walkthrough",
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // ==================== 3. BOTTOM VISUAL NOVEL STAGE (CHIBIS + BLUE ARCHIVE DIALOGUE BOX) ====================
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+        ) {
+            // Character Stage Row right above the dialogue panel
+            // Automatically compacts height when highlighting lower-screen cards so the cutout is never blocked!
+            val stageHeight = when {
+                currentLine.activeSide == "ALL_THREE" -> 195.dp
+                isLowCutout -> 112.dp
+                else -> 160.dp
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(stageHeight)
+                    .padding(horizontal = 8.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                if (currentLine.activeSide == "ALL_THREE") {
+                    // Equal 1/3 weight for Grace, Shouko & Kian so all 3 stand at the EXACT same height and size!
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.BottomCenter
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.History,
-                                contentDescription = "Chat Log",
-                                tint = Color(0xFF38BDF8),
-                                modifier = Modifier.size(15.dp)
+                            VnCharacterStageSprite(
+                                drawableRes = currentLine.leftSpriteRes ?: R.drawable.chibi_grace_thankyou,
+                                isSpeaking = true,
+                                puppetOffsetY = puppetOffset.value,
+                                glowColor = Color(0xFF38BDF8),
+                                spriteHeight = 190.dp
                             )
-                            Spacer(Modifier.width(5.dp))
-                            Text(
-                                text = if (isTagalog) "Log" else "Log",
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFFE2E8F0),
-                                maxLines = 1,
-                                softWrap = false
+                        }
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.BottomCenter
+                        ) {
+                            VnCharacterStageSprite(
+                                drawableRes = currentLine.centerSpriteRes ?: R.drawable.chibi_shouko_thankyou,
+                                isSpeaking = true,
+                                puppetOffsetY = puppetOffset.value * 0.9f,
+                                glowColor = Color(0xFFF472B6),
+                                spriteHeight = 190.dp
+                            )
+                        }
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.BottomCenter
+                        ) {
+                            VnCharacterStageSprite(
+                                drawableRes = currentLine.rightSpriteRes ?: R.drawable.chibi_kian_thankyou,
+                                isSpeaking = true,
+                                puppetOffsetY = puppetOffset.value * 0.95f,
+                                glowColor = Color(0xFFF59E0B),
+                                spriteHeight = 190.dp
                             )
                         }
                     }
-
-                    // Skip Button
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = Color(0xE61E293B),
-                        border = BorderStroke(1.dp, Color(0xFF475569)),
-                        modifier = Modifier.interactiveBounceClick { onDismiss() }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.BottomStart
                         ) {
-                            Text(
-                                text = if (isTagalog) "Laktawan" else "Skip",
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFE2E8F0),
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Skip Walkthrough",
-                                tint = Color(0xFF94A3B8),
-                                modifier = Modifier.size(14.dp)
-                            )
+                            if (currentLine.leftSpriteRes != null) {
+                                val isLeftActive = currentLine.activeSide == "LEFT" || currentLine.activeSide == "BOTH"
+                                VnCharacterStageSprite(
+                                    drawableRes = currentLine.leftSpriteRes,
+                                    isSpeaking = isLeftActive,
+                                    puppetOffsetY = if (isLeftActive) puppetOffset.value else 0f,
+                                    glowColor = if (currentLine.speaker == VnSpeaker.SHOUKO) Color(0xFFF472B6) else Color(0xFF38BDF8),
+                                    spriteHeight = stageHeight
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.BottomEnd
+                        ) {
+                            if (currentLine.rightSpriteRes != null) {
+                                val isRightActive = currentLine.activeSide == "RIGHT" || currentLine.activeSide == "BOTH"
+                                VnCharacterStageSprite(
+                                    drawableRes = currentLine.rightSpriteRes,
+                                    isSpeaking = isRightActive,
+                                    puppetOffsetY = if (isRightActive) puppetOffset.value else 0f,
+                                    glowColor = if (currentLine.speaker == VnSpeaker.KIAN) Color(0xFFF59E0B) else Color(0xFF38BDF8),
+                                    spriteHeight = stageHeight
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // ==================== 3. BOTTOM VISUAL NOVEL STAGE (CHIBIS + BLUE ARCHIVE DIALOGUE BOX) ====================
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
+            // ==================== BLUE ARCHIVE STYLE DIALOGUE PANEL ====================
+            Surface(
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                color = Color(0xF5070E20),
+                border = BorderStroke(
+                    width = 1.5.dp,
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            currentLine.speaker.accentColor.copy(alpha = 0.85f),
+                            Color(0xFF334155),
+                            currentLine.speaker.accentColor.copy(alpha = 0.5f)
+                        )
+                    )
+                ),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                // Character Stage Row (Left / Center / Right Chibis standing right above the dialogue bar)
-                Box(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(215.dp)
-                        .padding(horizontal = 12.dp),
-                    contentAlignment = Alignment.BottomCenter
+                        .padding(horizontal = 18.dp, vertical = 14.dp)
                 ) {
-                    if (currentLine.activeSide == "ALL_THREE") {
+                    // Speaker Name + Role Beside It ("Grace  Developer • Project Nexus" / "Shouko  Special Guest")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.Bottom
+                            verticalAlignment = Alignment.Bottom,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
                         ) {
-                            VnCharacterStageSprite(
-                                drawableRes = currentLine.leftSpriteRes ?: R.drawable.chibi_grace_happy,
-                                isSpeaking = true,
-                                puppetOffsetY = puppetOffset.value,
-                                glowColor = Color(0xFF38BDF8),
-                                spriteHeight = 185.dp
+                            Text(
+                                text = currentLine.speaker.displayName,
+                                fontSize = if (currentLine.speaker == VnSpeaker.ALL_THREE) 18.sp else 21.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White,
+                                maxLines = 1,
+                                softWrap = false
                             )
-                            VnCharacterStageSprite(
-                                drawableRes = currentLine.centerSpriteRes ?: R.drawable.chibi_shouko_happy,
-                                isSpeaking = true,
-                                puppetOffsetY = puppetOffset.value * 0.85f,
-                                glowColor = Color(0xFFF472B6),
-                                spriteHeight = 190.dp
-                            )
-                            VnCharacterStageSprite(
-                                drawableRes = currentLine.rightSpriteRes ?: R.drawable.chibi_kian_thumbs,
-                                isSpeaking = true,
-                                puppetOffsetY = puppetOffset.value * 0.9f,
-                                glowColor = Color(0xFFF59E0B),
-                                spriteHeight = 185.dp
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = if (isTagalog) currentLine.speaker.roleTl else currentLine.speaker.roleEn,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = currentLine.speaker.accentColor,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier
+                                    .padding(bottom = 2.dp)
+                                    .autoSlideIfOverflow()
                             )
                         }
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Bottom
-                        ) {
-                            // Left Character Slot
-                            Box(
-                                modifier = Modifier.weight(1f),
-                                contentAlignment = Alignment.BottomStart
-                            ) {
-                                if (currentLine.leftSpriteRes != null) {
-                                    val isLeftActive = currentLine.activeSide == "LEFT" || currentLine.activeSide == "BOTH"
-                                    VnCharacterStageSprite(
-                                        drawableRes = currentLine.leftSpriteRes,
-                                        isSpeaking = isLeftActive,
-                                        puppetOffsetY = if (isLeftActive) puppetOffset.value else 0f,
-                                        glowColor = if (currentLine.leftSpriteRes == R.drawable.chibi_shouko ||
-                                            currentLine.leftSpriteRes == R.drawable.chibi_shouko_notebook ||
-                                            currentLine.leftSpriteRes == R.drawable.chibi_shouko_happy
-                                        ) Color(0xFFF472B6) else Color(0xFF38BDF8),
-                                        spriteHeight = 205.dp
-                                    )
-                                }
-                            }
 
-                            // Right Character Slot
-                            Box(
-                                modifier = Modifier.weight(1f),
-                                contentAlignment = Alignment.BottomEnd
-                            ) {
-                                if (currentLine.rightSpriteRes != null) {
-                                    val isRightActive = currentLine.activeSide == "RIGHT" || currentLine.activeSide == "BOTH"
-                                    VnCharacterStageSprite(
-                                        drawableRes = currentLine.rightSpriteRes,
-                                        isSpeaking = isRightActive,
-                                        puppetOffsetY = if (isRightActive) puppetOffset.value else 0f,
-                                        glowColor = if (currentLine.rightSpriteRes == R.drawable.chibi_kian ||
-                                            currentLine.rightSpriteRes == R.drawable.chibi_kian_explain ||
-                                            currentLine.rightSpriteRes == R.drawable.chibi_kian_thumbs
-                                        ) Color(0xFFF59E0B) else Color(0xFF38BDF8),
-                                        spriteHeight = 205.dp
-                                    )
-                                }
-                            }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = currentPartInfo.accentColor.copy(alpha = 0.18f),
+                            border = BorderStroke(1.dp, currentPartInfo.accentColor.copy(alpha = 0.5f))
+                        ) {
+                            Text(
+                                text = "${currentPartInfo.badgeText} • ${currentIndex + 1}/${allDialogues.size}",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = currentPartInfo.accentColor,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
                         }
                     }
-                }
 
-                // ==================== BLUE ARCHIVE STYLE DIALOGUE PANEL ====================
-                Surface(
-                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                    color = Color(0xF2081022),
-                    border = BorderStroke(
-                        width = 1.5.dp,
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                currentLine.speaker.accentColor.copy(alpha = 0.85f),
-                                Color(0xFF334155),
-                                currentLine.speaker.accentColor.copy(alpha = 0.5f)
-                            )
-                        )
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
+                    Spacer(Modifier.height(7.dp))
+
+                    // Glowing Horizontal Accent Line under Speaker Name + Role
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 16.dp)
+                            .height(2.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        currentLine.speaker.accentColor,
+                                        currentLine.speaker.accentColor.copy(alpha = 0.35f),
+                                        Color.Transparent
+                                    )
+                                )
+                            )
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // Typewriter Animated Dialogue Text Box
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 76.dp, max = 114.dp)
+                            .verticalScroll(rememberScrollState())
                     ) {
-                        // Speaker Name + Role Beside It (Blue Archive Layout: "Grace  Developer • Project Nexus")
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.Bottom,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.Bottom,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(end = 8.dp)
+                        Text(
+                            text = fullDialogueText.take(visibleCharCount),
+                            fontSize = 14.5.sp,
+                            lineHeight = 21.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFFF1F5F9)
+                        )
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // Bottom Controls Row: [ ◀ Prev ]  [ Tap anywhere ▾ ]  [ Next / Team Inbox + Finish ]
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (currentIndex > 0) {
+                            OutlinedButton(
+                                onClick = {
+                                    UiSoundManager.playClick(context)
+                                    currentIndex--
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, Color(0xFF475569)),
+                                contentPadding = PaddingValues(horizontal = 11.dp, vertical = 5.dp),
+                                modifier = Modifier.height(36.dp)
                             ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Previous Dialogue",
+                                    tint = Color(0xFFE2E8F0),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
                                 Text(
-                                    text = currentLine.speaker.displayName,
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = Color.White,
+                                    text = if (isTagalog) "Nakaraan" else "Prev",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFE2E8F0),
                                     maxLines = 1,
                                     softWrap = false
                                 )
-                                Spacer(Modifier.width(10.dp))
-                                Text(
-                                    text = if (isTagalog) currentLine.speaker.roleTl else currentLine.speaker.roleEn,
-                                    fontSize = 13.5.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = currentLine.speaker.accentColor,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    modifier = Modifier
-                                        .padding(bottom = 2.dp)
-                                        .autoSlideIfOverflow()
-                                )
                             }
-
-                            // Part Badge on right of speaker header
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = currentPartInfo.accentColor.copy(alpha = 0.18f),
-                                border = BorderStroke(1.dp, currentPartInfo.accentColor.copy(alpha = 0.5f))
-                            ) {
-                                Text(
-                                    text = "${currentPartInfo.badgeText} • ${currentIndex + 1}/${allDialogues.size}",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = currentPartInfo.accentColor,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
-                            }
+                        } else {
+                            Spacer(Modifier.width(68.dp))
                         }
 
-                        Spacer(Modifier.height(8.dp))
-
-                        // Sleek Blue Archive-style glowing horizontal divider line under Name + Role
-                        Box(
+                        Text(
+                            text = if (isTyping) {
+                                if (isTagalog) "Pindutin para kumpletuhin..." else "Tap to show full text..."
+                            } else {
+                                if (isTagalog) "Pindutin kahit saan ▾" else "Tap anywhere ▾"
+                            },
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = currentLine.speaker.accentColor.copy(alpha = 0.9f),
+                            maxLines = 1,
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(2.dp)
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(
-                                            currentLine.speaker.accentColor,
-                                            currentLine.speaker.accentColor.copy(alpha = 0.35f),
-                                            Color.Transparent
-                                        )
-                                    )
-                                )
+                                .weight(1f)
+                                .padding(horizontal = 6.dp)
+                                .autoSlideIfOverflow(),
+                            textAlign = TextAlign.Center
                         )
 
-                        Spacer(Modifier.height(12.dp))
-
-                        // Typewriter Animated Dialogue Text Box
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 86.dp, max = 130.dp)
-                                .verticalScroll(rememberScrollState())
-                        ) {
-                            Text(
-                                text = fullDialogueText.take(visibleCharCount),
-                                fontSize = 15.sp,
-                                lineHeight = 22.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFFF1F5F9)
-                            )
-                        }
-
-                        Spacer(Modifier.height(12.dp))
-
-                        // Bottom Navigation Bar inside the VN Panel: [ ◀ Prev ]  [ Tap anywhere to continue ▾ ]  [ Next / Team Inbox ]
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Prev Button
-                            if (currentIndex > 0) {
-                                OutlinedButton(
+                        if (currentIndex == allDialogues.lastIndex) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Button(
                                     onClick = {
-                                        UiSoundManager.playClick(context)
-                                        currentIndex--
+                                        UiSoundManager.playSuccess(context)
+                                        onOpenFeedbackInbox()
                                     },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B)),
                                     shape = RoundedCornerShape(12.dp),
-                                    border = BorderStroke(1.dp, Color(0xFF475569)),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                    modifier = Modifier.height(38.dp)
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp),
+                                    modifier = Modifier.height(36.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Previous Dialogue",
-                                        tint = Color(0xFFE2E8F0),
-                                        modifier = Modifier.size(15.dp)
+                                        imageVector = Icons.Default.Inbox,
+                                        contentDescription = "Team Inbox",
+                                        tint = Color(0xFF0F172A),
+                                        modifier = Modifier.size(14.dp)
                                     )
-                                    Spacer(Modifier.width(5.dp))
+                                    Spacer(Modifier.width(4.dp))
                                     Text(
-                                        text = if (isTagalog) "Nakaraan" else "Prev",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFE2E8F0),
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                }
-                            } else {
-                                Spacer(Modifier.width(72.dp))
-                            }
-
-                            // Center Tap Prompt
-                            Text(
-                                text = if (isTyping) {
-                                    if (isTagalog) "Pindutin para kumpletuhin..." else "Tap to show full text..."
-                                } else {
-                                    if (isTagalog) "Pindutin kahit saan ▾" else "Tap anywhere to continue ▾"
-                                },
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = currentLine.speaker.accentColor.copy(alpha = 0.9f),
-                                maxLines = 1,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 8.dp)
-                                    .autoSlideIfOverflow(),
-                                textAlign = TextAlign.Center
-                            )
-
-                            // Right Action: Next OR Finale Team Inbox + Done
-                            if (currentIndex == allDialogues.lastIndex) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Button(
-                                        onClick = {
-                                            UiSoundManager.playSuccess(context)
-                                            onOpenFeedbackInbox()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B)),
-                                        shape = RoundedCornerShape(12.dp),
-                                        contentPadding = PaddingValues(horizontal = 11.dp, vertical = 6.dp),
-                                        modifier = Modifier.height(38.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Inbox,
-                                            contentDescription = "Team Inbox",
-                                            tint = Color(0xFF0F172A),
-                                            modifier = Modifier.size(15.dp)
-                                        )
-                                        Spacer(Modifier.width(4.dp))
-                                        Text(
-                                            text = "Team Inbox",
-                                            fontSize = 11.5.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = Color(0xFF0F172A),
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                    }
-
-                                    Button(
-                                        onClick = {
-                                            UiSoundManager.playClick(context)
-                                            onDismiss()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                                        shape = RoundedCornerShape(12.dp),
-                                        contentPadding = PaddingValues(horizontal = 11.dp, vertical = 6.dp),
-                                        modifier = Modifier.height(38.dp)
-                                    ) {
-                                        Text(
-                                            text = if (isTagalog) "Tapos" else "Finish",
-                                            fontSize = 11.5.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = Color.White,
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                    }
-                                }
-                            } else {
-                                Button(
-                                    onClick = { handleAdvanceOrCompleteTyping() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = currentLine.speaker.accentColor),
-                                    shape = RoundedCornerShape(12.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                    modifier = Modifier.height(38.dp)
-                                ) {
-                                    Text(
-                                        text = if (isTagalog) "Sunod" else "Next",
-                                        fontSize = 12.sp,
+                                        text = "Team Inbox",
+                                        fontSize = 11.5.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color(0xFF0F172A),
                                         maxLines = 1,
                                         softWrap = false
                                     )
-                                    Spacer(Modifier.width(4.dp))
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                        contentDescription = "Next",
-                                        tint = Color(0xFF0F172A),
-                                        modifier = Modifier.size(15.dp)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        UiSoundManager.playClick(context)
+                                        onDismiss()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp),
+                                    modifier = Modifier.height(36.dp)
+                                ) {
+                                    Text(
+                                        text = if (isTagalog) "Tapos" else "Finish",
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
+                            }
+                        } else {
+                            Button(
+                                onClick = { handleAdvanceOrCompleteTyping() },
+                                colors = ButtonDefaults.buttonColors(containerColor = currentLine.speaker.accentColor),
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 11.dp, vertical = 5.dp),
+                                modifier = Modifier.height(36.dp)
+                            ) {
+                                Text(
+                                    text = if (isTagalog) "Sunod" else "Next",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF0F172A),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = "Next",
+                                    tint = Color(0xFF0F172A),
+                                    modifier = Modifier.size(14.dp)
+                                )
                             }
                         }
                     }
                 }
             }
+        }
 
-            // ==================== 4. PART SELECTOR MODAL (JUMP TO PART 1..6 ANYTIME) ====================
-            if (showPartsSheet) {
-                WalkthroughPartSelectorModal(
-                    parts = partsCatalog,
-                    currentPartNumber = currentLine.partNumber,
-                    isTagalog = isTagalog,
-                    onSelectPart = { selectedPartNum ->
-                        UiSoundManager.playClick(context)
-                        val targetIdx = allDialogues.indexOfFirst { it.partNumber == selectedPartNum }
-                        if (targetIdx >= 0) {
-                            currentIndex = targetIdx
-                        }
-                        showPartsSheet = false
-                    },
-                    onDismiss = { showPartsSheet = false }
-                )
-            }
+        // ==================== 4. PART SELECTOR MODAL (JUMP TO PART 1..6 ANYTIME) ====================
+        if (showPartsSheet) {
+            WalkthroughPartSelectorModal(
+                parts = partsCatalog,
+                currentPartNumber = currentLine.partNumber,
+                isTagalog = isTagalog,
+                onSelectPart = { selectedPartNum ->
+                    UiSoundManager.playClick(context)
+                    val targetIdx = allDialogues.indexOfFirst { it.partNumber == selectedPartNum }
+                    if (targetIdx >= 0) {
+                        currentIndex = targetIdx
+                    }
+                    showPartsSheet = false
+                },
+                onDismiss = { showPartsSheet = false }
+            )
+        }
 
-            // ==================== 5. CHAT LOG MODAL (VIEW DIALOGUE HISTORY SO FAR) ====================
-            if (showChatLogModal) {
-                WalkthroughChatLogModal(
-                    dialoguesSoFar = allDialogues.take(currentIndex + 1),
-                    isTagalog = isTagalog,
-                    onJumpToLine = { lineIdx ->
-                        UiSoundManager.playClick(context)
-                        currentIndex = lineIdx
-                        showChatLogModal = false
-                    },
-                    onDismiss = { showChatLogModal = false }
-                )
-            }
+        // ==================== 5. CHAT LOG MODAL (VIEW DIALOGUE HISTORY SO FAR) ====================
+        if (showChatLogModal) {
+            WalkthroughChatLogModal(
+                dialoguesSoFar = allDialogues.take(currentIndex + 1),
+                isTagalog = isTagalog,
+                onJumpToLine = { lineIdx ->
+                    UiSoundManager.playClick(context)
+                    currentIndex = lineIdx
+                    showChatLogModal = false
+                },
+                onDismiss = { showChatLogModal = false }
+            )
         }
     }
 }
@@ -1064,12 +1242,12 @@ private fun VnCharacterStageSprite(
     spriteHeight: Dp
 ) {
     val targetAlpha by animateFloatAsState(
-        targetValue = if (isSpeaking) 1f else 0.52f,
-        animationSpec = tween(240),
+        targetValue = if (isSpeaking) 1f else 0.50f,
+        animationSpec = tween(220),
         label = "SpeakerAlpha"
     )
     val targetScale by animateFloatAsState(
-        targetValue = if (isSpeaking) 1.03f else 0.93f,
+        targetValue = if (isSpeaking) 1.02f else 0.92f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "SpeakerScale"
     )
@@ -1088,14 +1266,14 @@ private fun VnCharacterStageSprite(
         if (isSpeaking) {
             Canvas(
                 modifier = Modifier
-                    .size(spriteHeight * 0.82f)
+                    .size(spriteHeight * 0.78f)
                     .align(Alignment.Center)
             ) {
                 drawCircle(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            glowColor.copy(alpha = 0.34f),
-                            glowColor.copy(alpha = 0.08f),
+                            glowColor.copy(alpha = 0.30f),
+                            glowColor.copy(alpha = 0.06f),
                             Color.Transparent
                         )
                     ),
@@ -1104,10 +1282,9 @@ private fun VnCharacterStageSprite(
             }
         }
 
-        // Crossfade smoothly whenever the character changes pose!
         Crossfade(
             targetState = drawableRes,
-            animationSpec = tween(220),
+            animationSpec = tween(200),
             label = "ChibiPoseCrossfade"
         ) { targetRes ->
             Image(
@@ -1116,124 +1293,6 @@ private fun VnCharacterStageSprite(
                 modifier = Modifier.height(spriteHeight),
                 contentScale = ContentScale.Fit
             )
-        }
-    }
-}
-
-/**
- * Spotlight Focus Box ("HERE • ...") that highlights the relevant UI zone on the blurred background screen.
- */
-@Composable
-private fun BoxScope.SpotlightFocusHighlight(
-    zone: SpotlightFocusZone,
-    label: String,
-    accentColor: Color,
-    pulseScale: Float
-) {
-    val topPadding: Dp
-    val boxHeight: Dp
-
-    when (zone) {
-        SpotlightFocusZone.TOP_BAR -> {
-            topPadding = 52.dp
-            boxHeight = 68.dp
-        }
-        SpotlightFocusZone.CENTER_HERO -> {
-            topPadding = 128.dp
-            boxHeight = 170.dp
-        }
-        SpotlightFocusZone.CAMERA_VIEWFINDER -> {
-            topPadding = 122.dp
-            boxHeight = 210.dp
-        }
-        SpotlightFocusZone.FORMED_WORD_BOX -> {
-            topPadding = 315.dp
-            boxHeight = 105.dp
-        }
-        SpotlightFocusZone.ALPHABET_CHART_BTN -> {
-            topPadding = 118.dp
-            boxHeight = 82.dp
-        }
-        SpotlightFocusZone.TRANSLATE_OUTPUT_BOX -> {
-            topPadding = 126.dp
-            boxHeight = 140.dp
-        }
-        SpotlightFocusZone.QUICK_WORDS_GRID -> {
-            topPadding = 265.dp
-            boxHeight = 145.dp
-        }
-        SpotlightFocusZone.SOS_CARDS -> {
-            topPadding = 155.dp
-            boxHeight = 195.dp
-        }
-        SpotlightFocusZone.SETTINGS_CARDS -> {
-            topPadding = 155.dp
-            boxHeight = 195.dp
-        }
-        SpotlightFocusZone.NONE -> return
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = topPadding, start = 18.dp, end = 18.dp)
-            .align(Alignment.TopCenter)
-            .scale(pulseScale),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Glowing "HERE" Pointer Pill
-        Surface(
-            shape = RoundedCornerShape(50),
-            color = accentColor,
-            shadowElevation = 8.dp
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MyLocation,
-                    contentDescription = null,
-                    tint = Color(0xFF0F172A),
-                    modifier = Modifier.size(15.dp)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = label,
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Black,
-                    color = Color(0xFF0F172A),
-                    maxLines = 1,
-                    softWrap = false,
-                    modifier = Modifier.autoSlideIfOverflow()
-                )
-            }
-        }
-
-        Spacer(Modifier.height(6.dp))
-
-        // Spotlight Frame with BorderBeam around the highlighted app section
-        BorderBeamBox(
-            active = true,
-            cornerRadius = 20.dp,
-            beamColor = accentColor,
-            secondaryColor = Color.White,
-            baseBorderColor = accentColor.copy(alpha = 0.65f),
-            backgroundColor = accentColor.copy(alpha = 0.06f),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(boxHeight)
-        ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "✦",
-                    fontSize = 22.sp,
-                    color = accentColor.copy(alpha = 0.45f)
-                )
-            }
         }
     }
 }
@@ -1450,7 +1509,7 @@ private fun WalkthroughChatLogModal(
                             VnSpeaker.GRACE -> line.leftSpriteRes ?: R.drawable.chibi_grace
                             VnSpeaker.KIAN -> line.rightSpriteRes ?: R.drawable.chibi_kian
                             VnSpeaker.SHOUKO -> line.leftSpriteRes ?: R.drawable.chibi_shouko
-                            VnSpeaker.ALL_THREE -> R.drawable.chibi_grace_happy
+                            VnSpeaker.ALL_THREE -> R.drawable.chibi_grace_thankyou
                         }
                         Surface(
                             shape = RoundedCornerShape(16.dp),
@@ -1512,7 +1571,6 @@ private fun WalkthroughChatLogModal(
 /**
  * Project Nexus Team Feedback Inbox Modal — allows users to send feedback, appreciation,
  * or bug reports directly to Grace, Kian, and the Project Nexus (Ascendens) development team.
- * Uses `autoSlideIfOverflow()` on all category chips so long text slides smoothly to the left.
  */
 @Composable
 fun TeamFeedbackInboxDialog(
@@ -1602,7 +1660,6 @@ fun TeamFeedbackInboxDialog(
 
                     Spacer(Modifier.height(10.dp))
 
-                    // Mini Chibi Trio Greeting Banner
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = Color(0xFF162447),
@@ -1614,17 +1671,17 @@ fun TeamFeedbackInboxDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Image(
-                                painter = painterResource(id = R.drawable.chibi_grace_happy),
+                                painter = painterResource(id = R.drawable.chibi_grace_thankyou),
                                 contentDescription = "Grace",
                                 modifier = Modifier.size(44.dp)
                             )
                             Image(
-                                painter = painterResource(id = R.drawable.chibi_shouko_happy),
+                                painter = painterResource(id = R.drawable.chibi_shouko_thankyou),
                                 contentDescription = "Shouko",
                                 modifier = Modifier.size(44.dp)
                             )
                             Image(
-                                painter = painterResource(id = R.drawable.chibi_kian_thumbs),
+                                painter = painterResource(id = R.drawable.chibi_kian_thankyou),
                                 contentDescription = "Kian",
                                 modifier = Modifier.size(44.dp)
                             )
@@ -1644,7 +1701,6 @@ fun TeamFeedbackInboxDialog(
 
                     Spacer(Modifier.height(12.dp))
 
-                    // Category Selector Row — uses autoSlideIfOverflow() so full text slides smoothly left!
                     Text(
                         text = if (isTagalog) "Uri ng Mensahe:" else "Feedback Topic:",
                         fontSize = 12.sp,
