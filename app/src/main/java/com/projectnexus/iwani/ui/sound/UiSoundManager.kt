@@ -29,12 +29,17 @@ object UiSoundManager {
     var hapticsEnabled: Boolean = true
     var profile: SoundProfile = SoundProfile.CRYSTAL
     var volume: Float = 0.75f
+    var fslAcceptanceSeconds: Float = 2.5f
+
+    @Volatile
+    private var isSpeakingVibrating: Boolean = false
 
     fun loadPrefs(context: Context) {
         val prefs = context.getSharedPreferences("iwani_ui_settings", Context.MODE_PRIVATE)
         soundEnabled = prefs.getBoolean("sound_enabled", true)
-        hapticsEnabled = prefs.getBoolean("haptics_enabled", true)
+        hapticsEnabled = prefs.getBoolean("haptics_enabled_v2", true)
         volume = prefs.getFloat("sound_volume", 0.75f)
+        fslAcceptanceSeconds = prefs.getFloat("fsl_acceptance_seconds", 2.5f).coerceIn(1.0f, 4.0f)
         val profName = prefs.getString("sound_profile", SoundProfile.CRYSTAL.name) ?: SoundProfile.CRYSTAL.name
         profile = try {
             SoundProfile.valueOf(profName)
@@ -46,14 +51,15 @@ object UiSoundManager {
     fun savePrefs(context: Context) {
         context.getSharedPreferences("iwani_ui_settings", Context.MODE_PRIVATE).edit()
             .putBoolean("sound_enabled", soundEnabled)
-            .putBoolean("haptics_enabled", hapticsEnabled)
+            .putBoolean("haptics_enabled_v2", hapticsEnabled)
             .putFloat("sound_volume", volume)
+            .putFloat("fsl_acceptance_seconds", fslAcceptanceSeconds.coerceIn(1.0f, 4.0f))
             .putString("sound_profile", profile.name)
             .apply()
     }
 
     fun playClick(context: Context? = null) {
-        context?.let { triggerHaptic(it, 12L) }
+        context?.let { triggerHaptic(it, 42L) }
         if (!soundEnabled) return
         when (profile) {
             SoundProfile.CRYSTAL -> playSynthesizedTone(startHz = 740.0, endHz = 1180.0, durationMs = 45, harmonicRatio = 2.0)
@@ -64,13 +70,13 @@ object UiSoundManager {
     }
 
     fun playNav(context: Context? = null) {
-        context?.let { triggerHaptic(it, 15L) }
+        context?.let { triggerHaptic(it, 48L) }
         if (!soundEnabled) return
         playSynthesizedTone(startHz = 587.33, endHz = 880.0, durationMs = 55, harmonicRatio = 1.5)
     }
 
     fun playToggle(context: Context? = null, isOn: Boolean = true) {
-        context?.let { triggerHaptic(it, 18L) }
+        context?.let { triggerHaptic(it, 55L) }
         if (!soundEnabled) return
         if (isOn) {
             playSynthesizedTone(startHz = 659.25, endHz = 987.77, durationMs = 65, harmonicRatio = 2.0)
@@ -80,7 +86,7 @@ object UiSoundManager {
     }
 
     fun playSuccess(context: Context? = null) {
-        context?.let { triggerHaptic(it, 30L) }
+        context?.let { triggerHaptic(it, 75L) }
         if (!soundEnabled) return
         thread {
             val notes = doubleArrayOf(523.25, 659.25, 783.99, 1046.50)
@@ -225,24 +231,83 @@ object UiSoundManager {
         } catch (_: Exception) {}
     }
 
-    private fun triggerHaptic(context: Context, durationMs: Long) {
-        if (!hapticsEnabled) return
-        try {
-            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    private fun getVibrator(context: Context): Vibrator? {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
                 vm?.defaultVibrator
             } else {
                 @Suppress("DEPRECATION")
                 context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
             }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun triggerHaptic(context: Context, durationMs: Long = 42L) {
+        if (!hapticsEnabled) return
+        try {
+            val vibrator = getVibrator(context)
             if (vibrator?.hasVibrator() == true) {
+                val attrs = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    vibrator.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(
+                        VibrationEffect.createOneShot(durationMs, 220),
+                        attrs
+                    )
                 } else {
                     @Suppress("DEPRECATION")
                     vibrator.vibrate(durationMs)
                 }
             }
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Starts a continuous rhythmic vibration while Text-To-Speech (TTS) is actively speaking,
+     * so a Deaf user physically feels that the phone is currently broadcasting their voice,
+     * and stops immediately when TTS finishes speaking.
+     */
+    fun startSpeakingVibration(context: Context) {
+        if (!hapticsEnabled) return
+        isSpeakingVibrating = true
+        val appCtx = context.applicationContext
+        thread {
+            val vibrator = getVibrator(appCtx) ?: return@thread
+            if (!vibrator.hasVibrator()) return@thread
+            val attrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+            while (isSpeakingVibrating && hapticsEnabled) {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        @Suppress("DEPRECATION")
+                        vibrator.vibrate(
+                            VibrationEffect.createOneShot(200L, 210),
+                            attrs
+                        )
+                    } else {
+                        @Suppress("DEPRECATION")
+                        vibrator.vibrate(200L)
+                    }
+                    Thread.sleep(320L)
+                } catch (_: Exception) {
+                    break
+                }
+            }
+        }
+    }
+
+    fun stopSpeakingVibration(context: Context) {
+        isSpeakingVibrating = false
+        try {
+            getVibrator(context.applicationContext)?.cancel()
         } catch (_: Exception) {}
     }
 

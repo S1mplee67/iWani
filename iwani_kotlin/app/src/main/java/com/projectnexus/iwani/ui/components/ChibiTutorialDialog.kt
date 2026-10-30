@@ -552,8 +552,8 @@ fun ChibiMascotTutorialDialog(
                     topFraction = 0.51f,
                     bottomFraction = 0.62f
                 ),
-                textEn = "Below the chips is the 'Output' box! Whether you signed words from the camera, tapped a Quick Word chip, or typed multiple words like 'MASAKIT ULO GAMOT', they appear right here.",
-                textTl = "Sa ibaba ng mga chips ay ang 'Output' box! Mula man sa kamera, Quick Word chip, o tinype na mga salita tulad ng 'MASAKIT ULO GAMOT', dito ito lalabas."
+                textEn = "Below the chips is the 'Input here' box! Whether you signed words from the camera, tapped a Quick Word chip, or typed multiple words like 'MASAKIT ULO GAMOT', you can input them right here.",
+                textTl = "Sa ibaba ng mga chips ay ang 'Mag-input dito' box! Mula man sa kamera, Quick Word chip, o tinype na mga salita tulad ng 'MASAKIT ULO GAMOT', dito mo ito ilalagay."
             ),
             WalkthroughDialogueLine(
                 partNumber = 3,
@@ -708,17 +708,32 @@ fun ChibiMascotTutorialDialog(
             WalkthroughDialogueLine(
                 partNumber = 5,
                 speaker = VnSpeaker.GRACE,
+                leftSpriteRes = R.drawable.chibi_grace_point,
+                rightSpriteRes = R.drawable.chibi_kian_explain,
+                activeSide = "LEFT",
+                backgroundRoute = "settings",
+                cutout = SpotlightCutoutSpec(
+                    targetId = "settings_fsl_speed",
+                    topFraction = 0.16f,
+                    bottomFraction = 0.48f
+                ),
+                textEn = "Next is 'FSL Alphabet Acceptance Speed'! 1.0s is the fastest speed, and you can slow it down up to 4.0s — by default it starts right in the middle at 2.5s so you have plenty of time to form each hand sign comfortably!",
+                textTl = "Sunod ay ang 'Bilis ng Pagtanggap ng FSL Titik'! 1.0s ang pinakamabilis, at pwede mo itong bagalan hanggang 4.0s — naka-default ito sa gitna (2.5s) upang komportable mong mabuo ang bawat senyas!"
+            ),
+            WalkthroughDialogueLine(
+                partNumber = 5,
+                speaker = VnSpeaker.KIAN,
                 leftSpriteRes = R.drawable.chibi_grace_happy,
                 rightSpriteRes = R.drawable.chibi_kian_thumbs,
-                activeSide = "LEFT",
+                activeSide = "RIGHT",
                 backgroundRoute = "settings",
                 cutout = SpotlightCutoutSpec(
                     targetId = "settings_sound",
                     topFraction = 0.12f,
                     bottomFraction = 0.48f
                 ),
-                textEn = "In 'Interactive Sound & Haptics' and 'Extracting AI Model (Qwen 2.5)' below, you can pick your favorite button sound (Crystal Chime, Cyber Pulse, Soft Pop, or Tactile Click) and manage our 350 MB offline AI engine!",
-                textTl = "Sa 'Tunog ng Button at Haptics' at 'Extracting AI Model (Qwen 2.5)' sa ibaba, maaari kang pumili ng tunog ng button at pamahalaan ang ating 350 MB offline AI engine!"
+                textEn = "In 'Interactive Sound & Haptics' and 'Extracting AI Model (Qwen 2.5)' below, you can pick your button sound, enable Haptic Tactile & Speech Vibration (which vibrates while SOS or TTS is speaking and stops when finished!), and manage our 350 MB offline AI engine!",
+                textTl = "Sa 'Tunog ng Button at Haptics' at 'Extracting AI Model (Qwen 2.5)' sa ibaba, maaari kang pumili ng tunog ng button, buksan ang Haptic Vibration (na nagba-vibrate habang nagsasalita ang SOS/TTS at hihinto pagkatapos!), at pamahalaan ang 350 MB offline AI engine!"
             ),
 
             // ==================== PART 6: THANK YOU & TEAM INBOX (3 TURNS) ====================
@@ -778,16 +793,6 @@ fun ChibiMascotTutorialDialog(
     // Sync background route automatically as the walkthrough progresses through Parts!
     LaunchedEffect(currentLine.backgroundRoute) {
         onNavigateToRoute(currentLine.backgroundRoute)
-    }
-
-    // Demonstrate Night & Day Mode wave transition when entering the Night & Day Mode step!
-    var hasAutoDemoedTheme by remember { mutableStateOf(false) }
-    LaunchedEffect(currentIndex) {
-        if (currentLine.demoThemeToggle && !hasAutoDemoedTheme) {
-            hasAutoDemoedTheme = true
-            delay(320L)
-            onToggleTheme()
-        }
     }
 
     // When cutout == null, apply real Gaussian blur to the background Scaffold;
@@ -1305,35 +1310,41 @@ fun ChibiMascotTutorialDialog(
                         )
                     }
 
-                    // Interactive Night & Day Mode Demo Chip on the Night & Day Mode step!
+                    // Interactive Night & Day Mode Button with Gradient Outline Glow (like FSL Camera workspace)
                     if (currentLine.demoThemeToggle) {
-                        Spacer(Modifier.height(8.dp))
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = currentLine.speaker.accentColor.copy(alpha = 0.18f),
-                            border = BorderStroke(1.dp, currentLine.speaker.accentColor),
-                            modifier = Modifier.interactiveBounceClick {
-                                onToggleTheme()
-                            }
+                        Spacer(Modifier.height(10.dp))
+                        BorderBeamBox(
+                            active = true,
+                            cornerRadius = 22.dp,
+                            beamColor = IcctBlue,
+                            secondaryColor = IcctGold,
+                            baseBorderColor = IcctGold.copy(alpha = 0.6f),
+                            backgroundColor = Color(0xFF0F1E3A),
+                            durationMillis = 2800,
+                            modifier = Modifier
+                                .wrapContentWidth()
+                                .interactiveBounceClick {
+                                    onToggleTheme()
+                                }
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
                                     imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
                                     contentDescription = "Toggle Day / Night Mode",
-                                    tint = currentLine.speaker.accentColor,
-                                    modifier = Modifier.size(15.dp)
+                                    tint = IcctGold,
+                                    modifier = Modifier.size(17.dp)
                                 )
-                                Spacer(Modifier.width(6.dp))
+                                Spacer(Modifier.width(8.dp))
                                 Text(
                                     text = if (isTagalog) {
-                                        if (isDarkTheme) "Subukan ang Day Mode (Liwanag) ☀️" else "Subukan ang Night Mode (Dilim) 🌙"
+                                        if (isDarkTheme) "Subukan ang Day Mode ☀️" else "Subukan ang Night Mode 🌙"
                                     } else {
-                                        if (isDarkTheme) "Try Day Mode Wave ☀️" else "Try Night Mode Wave 🌙"
+                                        if (isDarkTheme) "Try Day Mode ☀️" else "Try Night Mode 🌙"
                                     },
-                                    fontSize = 11.5.sp,
+                                    fontSize = 12.5.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White,
                                     maxLines = 1,
@@ -1913,22 +1924,7 @@ fun TeamFeedbackInboxDialog(
 ) {
     val isTagalog = appLanguage.isTagalog
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("iwani_team_inbox", Context.MODE_PRIVATE) }
-
-    var senderName by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf(if (isTagalog) "Papuri / Pasasalamat" else "Appreciation") }
-    var messageText by remember { mutableStateOf("") }
-    var sentHistory by remember {
-        mutableStateOf(
-            prefs.getStringSet("inbox_messages", emptySet())?.toList()?.sortedDescending() ?: emptyList()
-        )
-    }
-
-    val categories = if (isTagalog) {
-        listOf("Papuri / Pasasalamat", "Suhestiyon", "Ulat ng Bug", "Tanong sa Team")
-    } else {
-        listOf("Appreciation", "Feature Idea", "Bug Report", "Question")
-    }
+    val teamEmail = "ascendens.projectnexus@gmail.com"
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1961,8 +1957,9 @@ fun TeamFeedbackInboxDialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(18.dp)
-                        .verticalScroll(rememberScrollState())
+                        .padding(22.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1980,10 +1977,10 @@ fun TeamFeedbackInboxDialog(
                             )
                             Text(
                                 text = if (isTagalog)
-                                    "Direktang mensahe para kina Grace, Kian at Ascendens Team"
+                                    "Direktang mag-email kina Grace, Kian at Ascendens Team"
                                 else
-                                    "Send feedback directly to Grace, Kian & the Ascendens Team",
-                                fontSize = 11.5.sp,
+                                    "Email feedback directly to Grace, Kian & the Ascendens Team",
+                                fontSize = 12.sp,
                                 color = Color(0xFF94A3B8)
                             )
                         }
@@ -1992,249 +1989,156 @@ fun TeamFeedbackInboxDialog(
                         }
                     }
 
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(14.dp))
 
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(18.dp),
                         color = Color(0xFF162447),
                         border = BorderStroke(1.dp, Color(0xFF253B6E)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.chibi_grace_thankyou),
-                                contentDescription = "Grace",
-                                modifier = Modifier.size(44.dp)
-                            )
-                            Image(
-                                painter = painterResource(id = R.drawable.chibi_shouko_thankyou),
-                                contentDescription = "Shouko",
-                                modifier = Modifier.size(44.dp)
-                            )
-                            Image(
-                                painter = painterResource(id = R.drawable.chibi_kian_thankyou),
-                                contentDescription = "Kian",
-                                modifier = Modifier.size(44.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = if (isTagalog)
-                                    "\"Salamat po! Binabasa ng aming team ang bawat mensahe sa Inbox!\""
-                                else
-                                    "\"Thank you! Our developer team reads every message in our Inbox!\"",
-                                fontSize = 11.5.sp,
-                                color = Color(0xFFE2E8F0),
-                                lineHeight = 16.sp,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    Text(
-                        text = if (isTagalog) "Uri ng Mensahe:" else "Feedback Topic:",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF93C5FD)
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        categories.forEach { cat ->
-                            val isSel = selectedCategory == cat
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (isSel) Color(0xFF2563EB) else Color(0xFF1E293B),
-                                border = BorderStroke(1.dp, if (isSel) Color(0xFF60A5FA) else Color(0xFF334155)),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .interactiveBounceClick { selectedCategory = cat }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = cat,
-                                    fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier
-                                        .padding(horizontal = 6.dp, vertical = 8.dp)
-                                        .autoSlideIfOverflow()
+                                ChibiFaceAvatar(
+                                    drawableRes = R.drawable.chibi_grace_thankyou,
+                                    contentDescription = "Grace",
+                                    size = 52.dp,
+                                    shape = CircleShape,
+                                    backgroundColor = Color(0xFF0B1326),
+                                    borderColor = Color(0xFF38BDF8),
+                                    zoomScale = 2.15f
+                                )
+                                ChibiFaceAvatar(
+                                    drawableRes = R.drawable.chibi_shouko_thankyou,
+                                    contentDescription = "Shouko",
+                                    size = 52.dp,
+                                    shape = CircleShape,
+                                    backgroundColor = Color(0xFF0B1326),
+                                    borderColor = Color(0xFFF472B6),
+                                    zoomScale = 2.15f
+                                )
+                                ChibiFaceAvatar(
+                                    drawableRes = R.drawable.chibi_kian_thankyou,
+                                    contentDescription = "Kian",
+                                    size = 52.dp,
+                                    shape = CircleShape,
+                                    backgroundColor = Color(0xFF0B1326),
+                                    borderColor = Color(0xFFFBBF24),
+                                    zoomScale = 2.15f
                                 )
                             }
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                text = if (isTagalog)
+                                    "\"Maraming salamat po! Magpadala ng email sa aming team anumang oras — binabasa namin ang bawat mensahe!\""
+                                else
+                                    "\"Thank you! Send an email to our developer team anytime — we read every message!\"",
+                                fontSize = 12.5.sp,
+                                color = Color(0xFFE2E8F0),
+                                lineHeight = 18.sp,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
 
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(16.dp))
 
-                    OutlinedTextField(
-                        value = senderName,
-                        onValueChange = { senderName = it },
-                        label = {
-                            Text(
-                                if (isTagalog) "Iyong Pangalan (Opsyonal)" else "Your Name (Optional)",
-                                fontSize = 12.sp
-                            )
-                        },
-                        singleLine = true,
+                    // Official Team Email Address Display Card
+                    Surface(
                         shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF38BDF8),
-                            unfocusedBorderColor = Color(0xFF334155),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedContainerColor = Color(0xFF0F172A),
-                            unfocusedContainerColor = Color(0xFF0F172A)
-                        ),
+                        color = Color(0xFF0F172A),
+                        border = BorderStroke(1.dp, Color(0xFF334155)),
                         modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = messageText,
-                        onValueChange = { messageText = it },
-                        label = {
-                            Text(
-                                if (isTagalog) "Mensahe o Feedback para sa Team" else "Message or Feedback for the Team",
-                                fontSize = 12.sp
-                            )
-                        },
-                        minLines = 3,
-                        maxLines = 5,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFF59E0B),
-                            unfocusedBorderColor = Color(0xFF334155),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedContainerColor = Color(0xFF0F172A),
-                            unfocusedContainerColor = Color(0xFF0F172A)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Button(
-                            onClick = {
-                                if (messageText.isBlank()) {
-                                    Toast.makeText(
-                                        context,
-                                        if (isTagalog) "Pakisulat muna ang iyong mensahe." else "Please enter a message first.",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                    return@Button
-                                }
-                                val timestamp = SimpleDateFormat("MMM dd, hh:mm a", Locale.getDefault()).format(Date())
-                                val author = if (senderName.isBlank()) (if (isTagalog) "Bisita" else "Guest User") else senderName.trim()
-                                val entry = "[$timestamp] • $selectedCategory — $author: ${messageText.trim()}"
-                                val updated = (sentHistory + entry).takeLast(15)
-                                prefs.edit().putStringSet("inbox_messages", updated.toSet()).apply()
-                                sentHistory = updated.sortedDescending()
-                                messageText = ""
-                                UiSoundManager.playVillagerVoice(context, "all", "yay")
-                                Toast.makeText(
-                                    context,
-                                    if (isTagalog)
-                                        "Naipadala na sa Project Nexus Team Inbox! Maraming salamat po!"
-                                    else
-                                        "Sent to Project Nexus Team Inbox! Thank you from Grace, Kian & Shouko!",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B)),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp)
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Send,
-                                contentDescription = null,
-                                tint = Color(0xFF0F172A),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
                             Text(
-                                text = if (isTagalog) "Ipadala sa Inbox" else "Send to Team Inbox",
+                                text = if (isTagalog) "OPISYAL NA EMAIL NG PROJECT NEXUS" else "OFFICIAL PROJECT NEXUS EMAIL",
+                                fontSize = 10.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 12.5.sp,
-                                color = Color(0xFF0F172A),
+                                letterSpacing = 1.sp,
+                                color = Color(0xFF93C5FD)
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = teamEmail,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color(0xFFFBBF24),
                                 maxLines = 1,
                                 softWrap = false,
                                 modifier = Modifier.autoSlideIfOverflow()
                             )
                         }
+                    }
 
-                        OutlinedButton(
-                            onClick = {
+                    Spacer(Modifier.height(18.dp))
+
+                    // HUGE Email Button CTA
+                    BorderBeamBox(
+                        active = true,
+                        cornerRadius = 20.dp,
+                        beamColor = IcctGold,
+                        secondaryColor = IcctBlue,
+                        baseBorderColor = IcctGold.copy(alpha = 0.75f),
+                        backgroundColor = Color(0xFF2563EB),
+                        durationMillis = 2600,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(72.dp)
+                            .interactiveBounceClick {
+                                UiSoundManager.playVillagerVoice(context, "all", "yay")
                                 val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
-                                    data = Uri.parse("mailto:projectnexus.icct@gmail.com")
-                                    putExtra(Intent.EXTRA_SUBJECT, "[iWani Feedback • $selectedCategory] from ${senderName.ifBlank { "User" }}")
-                                    putExtra(Intent.EXTRA_TEXT, messageText)
+                                    data = Uri.parse("mailto:$teamEmail")
+                                    putExtra(Intent.EXTRA_SUBJECT, "[iWani • Project Nexus Feedback]")
                                 }
                                 try {
                                     context.startActivity(Intent.createChooser(emailIntent, "Email Project Nexus Team"))
                                 } catch (_: Exception) {
-                                    Toast.makeText(context, "projectnexus.icct@gmail.com", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, teamEmail, Toast.LENGTH_LONG).show()
                                 }
-                            },
-                            shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(1.dp, Color(0xFF38BDF8)),
-                            modifier = Modifier.height(46.dp)
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Email,
-                                contentDescription = "Email",
-                                tint = Color(0xFF38BDF8),
-                                modifier = Modifier.size(16.dp)
+                                contentDescription = "Email Team",
+                                tint = Color(0xFFFBBF24),
+                                modifier = Modifier.size(28.dp)
                             )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = "Email",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF38BDF8)
-                            )
-                        }
-                    }
-
-                    if (sentHistory.isNotEmpty()) {
-                        Spacer(Modifier.height(14.dp))
-                        Text(
-                            text = if (isTagalog) "Mga Naipadalang Mensahe sa Team:" else "Recent Messages in Team Inbox:",
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF93C5FD)
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            sentHistory.take(4).forEach { msg ->
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = Color(0xFF1E293B),
-                                    border = BorderStroke(1.dp, Color(0xFF334155)),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = msg,
-                                        fontSize = 11.sp,
-                                        color = Color(0xFFE2E8F0),
-                                        modifier = Modifier.padding(8.dp)
-                                    )
-                                }
+                            Spacer(Modifier.width(12.dp))
+                            Column(horizontalAlignment = Alignment.Start) {
+                                Text(
+                                    text = if (isTagalog) "MAG-EMAIL SA TEAM NGAYON" else "EMAIL PROJECT NEXUS TEAM",
+                                    fontSize = 15.5.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.autoSlideIfOverflow()
+                                )
+                                Text(
+                                    text = teamEmail,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFDBEAFE),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
                         }
                     }

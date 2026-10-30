@@ -2,10 +2,23 @@ package com.projectnexus.iwani.ui.screens
 
 import android.Manifest
 import android.content.ContentValues
+import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.Typeface
+import android.media.MediaCodec
+import android.media.MediaCodecInfo
+import android.media.MediaFormat
+import android.media.MediaMuxer
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
+import android.view.Surface
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -13,7 +26,6 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.video.*
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -59,11 +71,358 @@ import com.projectnexus.iwani.AppLanguage
 import com.projectnexus.iwani.emergency.EmergencySosManager
 import com.projectnexus.iwani.ml.FslCameraAnalyzer
 import com.projectnexus.iwani.ui.components.FslAlphabetFullModal
+import com.projectnexus.iwani.ui.components.autoSlideIfOverflow
 import com.projectnexus.iwani.ui.components.interactiveBounceClick
 import com.projectnexus.iwani.ui.components.tutorialSpotlightTarget
+import com.projectnexus.iwani.ui.sound.UiSoundManager
 import com.projectnexus.iwani.ui.theme.*
 import kotlinx.coroutines.delay
+import java.io.File
 import java.util.concurrent.Executors
+
+/**
+ * Hardware Surface MP4 Video Recorder that burns the live FSL Subtitle Bar,
+ * Formed Word, Live Detected Letter Badge, and 21-Joint Hand Skeleton directly
+ * into the recorded video frames saved to Gallery (Movies/iWani).
+ */
+private class SubtitleVideoRecorder(private val context: Context) {
+    private val lock = Any()
+    private var encoder: MediaCodec? = null
+    private var inputSurface: Surface? = null
+    private var muxer: MediaMuxer? = null
+    private var trackIndex = -1
+    private var muxerStarted = false
+    private var tempFile: File? = null
+    private var lastPtsUs = 0L
+
+    @Volatile
+    var isRecording = false
+        private set
+
+    private val width = 720
+    private val height = 1280
+    private val bufferInfo = MediaCodec.BufferInfo()
+
+    private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val cardBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.argb(232, 11, 19, 38)
+        style = Paint.Style.FILL
+    }
+    private val cardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.rgb(245, 158, 11)
+        style = Paint.Style.STROKE
+        strokeWidth = 3.5f
+    }
+    private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.rgb(147, 197, 253)
+        textSize = 22f
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+    private val signStatusPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.rgb(52, 211, 153)
+        textSize = 22f
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textAlign = Paint.Align.RIGHT
+    }
+    private val subtitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.rgb(251, 191, 36)
+        textSize = 40f
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+    }
+    private val bigLetterPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.rgb(251, 191, 36)
+        textSize = 68f
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+    }
+    private val bonePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.argb(200, 252, 211, 77)
+        strokeWidth = 6f
+        style = Paint.Style.STROKE
+    }
+    private val jointOuterPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.rgb(245, 158, 11)
+        style = Paint.Style.FILL
+    }
+    private val jointInnerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        style = Paint.Style.FILL
+    }
+
+    private val fingerBones = listOf(
+        0 to 1, 1 to 2, 2 to 3, 3 to 4,
+        0 to 5, 5 to 6, 6 to 7, 7 to 8,
+        0 to 9, 9 to 10, 10 to 11, 11 to 12,
+        0 to 13, 13 to 14, 14 to 15, 15 to 16,
+        0 to 17, 17 to 18, 18 to 19, 19 to 20,
+        5 to 9, 9 to 13, 13 to 17
+    )
+
+    fun start(): Boolean = synchronized(lock) {
+        if (isRecording) return true
+        return try {
+            val out = File(context.cacheDir, "iwani_rec_${System.currentTimeMillis()}.mp4")
+            tempFile = out
+            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
+                setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+                setInteger(MediaFormat.KEY_BIT_RATE, 4_000_000)
+                setInteger(MediaFormat.KEY_FRAME_RATE, 20)
+                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+            }
+            val enc = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+            enc.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            val surface = enc.createInputSurface()
+            enc.start()
+
+            encoder = enc
+            inputSurface = surface
+            muxer = MediaMuxer(out.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            trackIndex = -1
+            muxerStarted = false
+            lastPtsUs = 0L
+            isRecording = true
+            true
+        } catch (e: Exception) {
+            Log.e("SubtitleVideoRecorder", "Failed to start recorder: ${e.message}", e)
+            cleanupLocked()
+            false
+        }
+    }
+
+    fun recordFrame(
+        frameBitmap: Bitmap,
+        isFrontCamera: Boolean,
+        detectedLetter: String,
+        detectedConfidence: Float,
+        accumulatedWord: String,
+        landmarks: List<NormalizedLandmark>?,
+        isTagalog: Boolean
+    ) {
+        synchronized(lock) {
+            if (!isRecording) return
+            val surface = inputSurface ?: return
+            try {
+                val canvas = surface.lockCanvas(null) ?: return
+            try {
+                // 1. Draw Camera Frame (center-cropped to 720x1280, mirrored if front camera)
+                canvas.drawColor(android.graphics.Color.BLACK)
+                canvas.save()
+                if (isFrontCamera) {
+                    canvas.scale(-1f, 1f, width / 2f, height / 2f)
+                }
+                val srcRatio = frameBitmap.width.toFloat() / frameBitmap.height.toFloat()
+                val dstRatio = width.toFloat() / height.toFloat()
+                val srcRect = if (srcRatio > dstRatio) {
+                    val cropW = (frameBitmap.height * dstRatio).toInt()
+                    val left = (frameBitmap.width - cropW) / 2
+                    Rect(left, 0, left + cropW, frameBitmap.height)
+                } else {
+                    val cropH = (frameBitmap.width / dstRatio).toInt()
+                    val top = (frameBitmap.height - cropH) / 2
+                    Rect(0, top, frameBitmap.width, top + cropH)
+                }
+                canvas.drawBitmap(frameBitmap, srcRect, Rect(0, 0, width, height), bitmapPaint)
+                canvas.restore()
+
+                // 2. Draw 21-Joint MediaPipe Hand Skeleton
+                if (!landmarks.isNullOrEmpty()) {
+                    for ((s, e) in fingerBones) {
+                        if (s < landmarks.size && e < landmarks.size) {
+                            val p1 = landmarks[s]
+                            val p2 = landmarks[e]
+                            val x1 = (if (isFrontCamera) 1f - p1.x() else p1.x()) * width
+                            val y1 = p1.y() * height
+                            val x2 = (if (isFrontCamera) 1f - p2.x() else p2.x()) * width
+                            val y2 = p2.y() * height
+                            canvas.drawLine(x1, y1, x2, y2, bonePaint)
+                        }
+                    }
+                    for (lm in landmarks) {
+                        val px = (if (isFrontCamera) 1f - lm.x() else lm.x()) * width
+                        val py = lm.y() * height
+                        canvas.drawCircle(px, py, 10f, jointOuterPaint)
+                        canvas.drawCircle(px, py, 4.5f, jointInnerPaint)
+                    }
+                }
+
+                // 3. Draw Floating Live Detected Letter Badge on Right if active
+                val hasValidDetection = detectedLetter.isNotEmpty() && detectedConfidence >= 0.35f
+                if (hasValidDetection) {
+                    val badgeRect = RectF(width - 154f, height * 0.44f, width - 28f, height * 0.44f + 126f)
+                    canvas.drawRoundRect(badgeRect, 28f, 28f, cardBgPaint)
+                    canvas.drawRoundRect(badgeRect, 28f, 28f, cardBorderPaint)
+                    canvas.drawText(
+                        detectedLetter,
+                        badgeRect.centerX(),
+                        badgeRect.centerY() + 24f,
+                        bigLetterPaint
+                    )
+                }
+
+                // 4. Draw Burned-In Bottom FSL Subtitle Bar (always visible in saved video!)
+                val subRect = RectF(26f, height - 250f, width - 26f, height - 42f)
+                canvas.drawRoundRect(subRect, 32f, 32f, cardBgPaint)
+                canvas.drawRoundRect(subRect, 32f, 32f, cardBorderPaint)
+
+                val headerLeft = if (isTagalog) "iWani • NABUBUONG SALITA / SUBTITLE:" else "iWani • FORMED WORD / FSL SUBTITLE:"
+                canvas.drawText(headerLeft, subRect.left + 26f, subRect.top + 44f, labelPaint)
+
+                val signStatus = if (hasValidDetection) {
+                    "FSL: $detectedLetter (${(detectedConfidence * 100).toInt()}%)"
+                } else {
+                    if (isTagalog) "Naghahanap..." else "Scanning..."
+                }
+                canvas.drawText(signStatus, subRect.right - 26f, subRect.top + 44f, signStatusPaint)
+
+                val mainSubtitle = when {
+                    accumulatedWord.isNotBlank() && hasValidDetection -> "$accumulatedWord  [$detectedLetter]"
+                    accumulatedWord.isNotBlank() -> accumulatedWord
+                    hasValidDetection -> if (isTagalog) " Titik: $detectedLetter " else " Signing: $detectedLetter "
+                    else -> if (isTagalog) "[ Mag-sign upang mabuo ang subtitle ]" else "[ Sign FSL letters to display subtitle ]"
+                }
+
+                subtitlePaint.textSize = when {
+                    mainSubtitle.length > 28 -> 28f
+                    mainSubtitle.length > 20 -> 33f
+                    else -> 40f
+                }
+                canvas.drawText(
+                    mainSubtitle,
+                    subRect.centerX(),
+                    subRect.top + 132f,
+                    subtitlePaint
+                )
+            } finally {
+                surface.unlockCanvasAndPost(canvas)
+            }
+            drainEncoderLocked(endOfStream = false)
+            } catch (e: Exception) {
+                Log.e("SubtitleVideoRecorder", "Frame encode error: ${e.message}")
+            }
+        }
+    }
+
+    fun stopAndSaveToGallery(isTagalog: Boolean, onComplete: (Boolean) -> Unit) {
+        Thread {
+            var savedOk = false
+            synchronized(lock) {
+                if (!isRecording) return@Thread
+                isRecording = false
+                try {
+                    encoder?.signalEndOfInputStream()
+                    drainEncoderLocked(endOfStream = true)
+                } catch (e: Exception) {
+                    Log.e("SubtitleVideoRecorder", "EOS drain error: ${e.message}")
+                }
+                val recordedFile = tempFile
+                cleanupLocked()
+
+                if (recordedFile != null && recordedFile.exists() && recordedFile.length() > 0L) {
+                    savedOk = copyFileToMediaStore(recordedFile)
+                    recordedFile.delete()
+                }
+            }
+            Handler(Looper.getMainLooper()).post {
+                onComplete(savedOk)
+            }
+        }.start()
+    }
+
+    private fun drainEncoderLocked(endOfStream: Boolean) {
+        val enc = encoder ?: return
+        val mux = muxer ?: return
+        while (true) {
+            val outIndex = enc.dequeueOutputBuffer(bufferInfo, if (endOfStream) 10_000L else 0L)
+            when {
+                outIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                    if (!endOfStream) break
+                }
+                outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                    if (!muxerStarted) {
+                        trackIndex = mux.addTrack(enc.outputFormat)
+                        mux.start()
+                        muxerStarted = true
+                    }
+                }
+                outIndex >= 0 -> {
+                    val encodedData = enc.getOutputBuffer(outIndex)
+                    if (encodedData != null && bufferInfo.size > 0 && muxerStarted) {
+                        if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
+                            val safePts = maxOf(lastPtsUs + 1000L, bufferInfo.presentationTimeUs)
+                            bufferInfo.presentationTimeUs = safePts
+                            lastPtsUs = safePts
+                            encodedData.position(bufferInfo.offset)
+                            encodedData.limit(bufferInfo.offset + bufferInfo.size)
+                            mux.writeSampleData(trackIndex, encodedData, bufferInfo)
+                        }
+                    }
+                    enc.releaseOutputBuffer(outIndex, false)
+                    if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    private fun copyFileToMediaStore(sourceFile: File): Boolean {
+        return try {
+            val resolver = context.contentResolver
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, "iWani_FSL_${System.currentTimeMillis()}.mp4")
+                put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/iWani")
+                    put(MediaStore.Video.Media.IS_PENDING, 1)
+                }
+            }
+            val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues) ?: return false
+            resolver.openOutputStream(uri)?.use { outStream ->
+                sourceFile.inputStream().use { inStream ->
+                    inStream.copyTo(outStream)
+                }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val doneValues = ContentValues().apply {
+                    put(MediaStore.Video.Media.IS_PENDING, 0)
+                }
+                resolver.update(uri, doneValues, null, null)
+            }
+            true
+        } catch (e: Exception) {
+            Log.e("SubtitleVideoRecorder", "MediaStore save error: ${e.message}", e)
+            false
+        }
+    }
+
+    private fun cleanupLocked() {
+        try {
+            encoder?.stop()
+        } catch (_: Exception) {}
+        try {
+            encoder?.release()
+        } catch (_: Exception) {}
+        encoder = null
+
+        try {
+            inputSurface?.release()
+        } catch (_: Exception) {}
+        inputSurface = null
+
+        try {
+            if (muxerStarted) {
+                muxer?.stop()
+            }
+        } catch (_: Exception) {}
+        try {
+            muxer?.release()
+        } catch (_: Exception) {}
+        muxer = null
+        muxerStarted = false
+        trackIndex = -1
+    }
+}
 
 @Composable
 fun FslCameraScreen(
@@ -140,11 +499,16 @@ fun FslCameraScreen(
     var lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_FRONT) }
     var showCheatSheet by remember { mutableStateOf(false) }
 
-    // Video Recording State
+    // Video Recording State (records camera + burned-in FSL subtitles + 21-joint hand skeleton)
     var isRecording by remember { mutableStateOf(false) }
     var recordingDuration by remember { mutableIntStateOf(0) }
-    var activeRecording by remember { mutableStateOf<Recording?>(null) }
-    var videoCaptureInstance by remember { mutableStateOf<VideoCapture<Recorder>?>(null) }
+    val subtitleVideoRecorder = remember { SubtitleVideoRecorder(context) }
+
+    val currentDetectedLetter by rememberUpdatedState(detectedLetter)
+    val currentDetectedConfidence by rememberUpdatedState(detectedConfidence)
+    val currentAccumulatedWord by rememberUpdatedState(accumulatedWord)
+    val currentHandLandmarks by rememberUpdatedState(handLandmarks)
+    val currentIsTagalog by rememberUpdatedState(isTagalog)
 
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
@@ -177,7 +541,23 @@ fun FslCameraScreen(
             it.setSurfaceProvider(pView.surfaceProvider)
         }
 
-        val analyzer = FslCameraAnalyzer(context) { letter, conf, landmarks, committed ->
+        val isFront = lensFacing == CameraSelector.LENS_FACING_FRONT
+        val analyzer = FslCameraAnalyzer(
+            context = context,
+            onFrame = { frameBitmap ->
+                if (subtitleVideoRecorder.isRecording) {
+                    subtitleVideoRecorder.recordFrame(
+                        frameBitmap = frameBitmap,
+                        isFrontCamera = isFront,
+                        detectedLetter = currentDetectedLetter,
+                        detectedConfidence = currentDetectedConfidence,
+                        accumulatedWord = currentAccumulatedWord,
+                        landmarks = currentHandLandmarks,
+                        isTagalog = currentIsTagalog
+                    )
+                }
+            }
+        ) { letter, conf, landmarks, committed ->
             detectedLetter = letter
             detectedConfidence = conf
             handLandmarks = landmarks
@@ -194,28 +574,19 @@ fun FslCameraScreen(
                 it.setAnalyzer(cameraExecutor, analyzer)
             }
 
-        val recorder = Recorder.Builder()
-            .setQualitySelector(QualitySelector.from(Quality.SD, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)))
-            .build()
-        val videoCapture = VideoCapture.withOutput(recorder)
-        videoCaptureInstance = videoCapture
-
         try {
             provider.unbindAll()
-            provider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageAnalysis, videoCapture)
-        } catch (e: Exception) {
-            try {
-                provider.unbindAll()
-                provider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageAnalysis)
-            } catch (ex: Exception) {
-                Log.e("FslCamera", "Failed to bind camera: ${ex.message}", ex)
-            }
+            provider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageAnalysis)
+        } catch (ex: Exception) {
+            Log.e("FslCamera", "Failed to bind camera: ${ex.message}", ex)
         }
     }
 
     DisposableEffect(Unit) {
         onDispose {
-            activeRecording?.stop()
+            if (subtitleVideoRecorder.isRecording) {
+                subtitleVideoRecorder.stopAndSaveToGallery(isTagalog) {}
+            }
             cameraExecutor.shutdown()
         }
     }
@@ -370,7 +741,10 @@ fun FslCameraScreen(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     IconButton(
-                        onClick = { showCheatSheet = true },
+                        onClick = {
+                            UiSoundManager.playClick(context)
+                            showCheatSheet = true
+                        },
                         modifier = Modifier
                             .background(surfaceColor, CircleShape)
                             .border(1.dp, borderColor, CircleShape)
@@ -384,6 +758,7 @@ fun FslCameraScreen(
 
                     IconButton(
                         onClick = {
+                            UiSoundManager.playClick(context)
                             if (isRecording) {
                                 Toast.makeText(
                                     context,
@@ -493,7 +868,8 @@ fun FslCameraScreen(
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
-                                softWrap = false
+                                softWrap = false,
+                                modifier = Modifier.autoSlideIfOverflow()
                             )
                             Text(
                                 text = if (isTagalog)
@@ -503,11 +879,12 @@ fun FslCameraScreen(
                                 color = textSecondaryColor.copy(alpha = 0.78f),
                                 fontSize = 10.sp,
                                 maxLines = 1,
-                                softWrap = false
+                                softWrap = false,
+                                modifier = Modifier.autoSlideIfOverflow()
                             )
                         }
 
-                        // Record Button Toggle (Sends directly to Gallery)
+                        // Record Button Toggle (Records with Burned-In FSL Subtitles directly to Gallery)
                         Surface(
                             shape = RoundedCornerShape(20.dp),
                             color = if (isRecording) EmergencyRed else (if (isDarkTheme) IcctBlue.copy(alpha = 0.25f) else Color(0xFFEFF6FF)),
@@ -517,52 +894,36 @@ fun FslCameraScreen(
                         ) {
                             TextButton(
                                 onClick = {
+                                    UiSoundManager.playClick(context)
                                     if (!isRecording) {
-                                        val vc = videoCaptureInstance
-                                        if (vc != null) {
-                                            val contentValues = ContentValues().apply {
-                                                put(MediaStore.MediaColumns.DISPLAY_NAME, "iWani_FSL_${System.currentTimeMillis()}")
-                                                put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
-                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                                    put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/iWani")
-                                                }
-                                            }
-                                            val outputOptions = MediaStoreOutputOptions.Builder(
-                                                context.contentResolver,
-                                                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-                                            ).setContentValues(contentValues).build()
-
-                                            activeRecording = vc.output
-                                                .prepareRecording(context, outputOptions)
-                                                .start(ContextCompat.getMainExecutor(context)) { event ->
-                                                    when (event) {
-                                                        is VideoRecordEvent.Start -> {
-                                                            isRecording = true
-                                                        }
-                                                        is VideoRecordEvent.Finalize -> {
-                                                            isRecording = false
-                                                            if (!event.hasError()) {
-                                                                Toast.makeText(
-                                                                    context,
-                                                                    if (isTagalog) "✓ Na-save ang video sa Gallery (Movies/iWani)!" else "✓ Video saved to Gallery (Movies/iWani)!",
-                                                                    Toast.LENGTH_LONG
-                                                                ).show()
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                        } else {
+                                        val started = subtitleVideoRecorder.start()
+                                        if (started) {
                                             isRecording = true
+                                            Toast.makeText(
+                                                context,
+                                                if (isTagalog) "🔴 Nagre-record na (kasama ang FSL Subtitle sa video)..." else "🔴 Recording started (with burned-in FSL Subtitles)...",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        } else {
+                                            Toast.makeText(
+                                                context,
+                                                if (isTagalog) "Hindi masimulan ang pag-record." else "Could not start video recorder.",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                         }
                                     } else {
-                                        activeRecording?.stop()
-                                        activeRecording = null
                                         isRecording = false
-                                        Toast.makeText(
-                                            context,
-                                            if (isTagalog) "✓ Na-save na ang na-record na video sa Gallery!" else "✓ Recorded video saved to Gallery!",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                        subtitleVideoRecorder.stopAndSaveToGallery(isTagalog) { savedOk ->
+                                            Toast.makeText(
+                                                context,
+                                                if (savedOk) {
+                                                    if (isTagalog) "✓ Na-save ang video na may FSL Subtitle sa Gallery (Movies/iWani)!" else "✓ Video with FSL Subtitles saved to Gallery (Movies/iWani)!"
+                                                } else {
+                                                    if (isTagalog) "✓ Na-save na ang na-record na video sa Gallery!" else "✓ Recorded video saved to Gallery!"
+                                                },
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
                                     }
                                 },
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
@@ -580,7 +941,8 @@ fun FslCameraScreen(
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     softWrap = false,
-                                    color = if (isRecording) Color.White else textPrimaryColor
+                                    color = if (isRecording) Color.White else textPrimaryColor,
+                                    modifier = Modifier.autoSlideIfOverflow()
                                 )
                             }
                         }
@@ -647,6 +1009,7 @@ fun FslCameraScreen(
                                 if (accumulatedWord.isNotEmpty()) {
                                     IconButton(
                                         onClick = {
+                                            UiSoundManager.playClick(context)
                                             wordFieldValue = TextFieldValue("", TextRange(0))
                                             Toast.makeText(
                                                 context,
@@ -707,7 +1070,10 @@ fun FslCameraScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
-                            onClick = { insertAtCursor(" ") },
+                            onClick = {
+                                UiSoundManager.playClick(context)
+                                insertAtCursor(" ")
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(46.dp),
@@ -726,12 +1092,14 @@ fun FslCameraScreen(
                                 softWrap = false,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = textPrimaryColor
+                                color = textPrimaryColor,
+                                modifier = Modifier.autoSlideIfOverflow()
                             )
                         }
 
                         Button(
                             onClick = {
+                                UiSoundManager.playClick(context)
                                 if (accumulatedWord.isNotEmpty()) {
                                     deleteAtCursor()
                                 } else {
@@ -760,12 +1128,14 @@ fun FslCameraScreen(
                                 softWrap = false,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = textPrimaryColor
+                                color = textPrimaryColor,
+                                modifier = Modifier.autoSlideIfOverflow()
                             )
                         }
 
                         Button(
                             onClick = {
+                                UiSoundManager.playClick(context)
                                 if (accumulatedWord.isNotBlank()) {
                                     sosManager.speak(accumulatedWord)
                                 } else {
@@ -792,7 +1162,8 @@ fun FslCameraScreen(
                                 softWrap = false,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color.White
+                                color = Color.White,
+                                modifier = Modifier.autoSlideIfOverflow()
                             )
                         }
                     }

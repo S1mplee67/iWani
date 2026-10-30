@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -23,8 +24,11 @@ import androidx.compose.ui.unit.sp
 import com.projectnexus.iwani.AppLanguage
 import com.projectnexus.iwani.emergency.EmergencyPhrase
 import com.projectnexus.iwani.emergency.EmergencySosManager
+import com.projectnexus.iwani.ui.components.TutorialSpotlightRegistry
 import com.projectnexus.iwani.ui.components.VoiceGlowBar
+import com.projectnexus.iwani.ui.components.autoSlideIfOverflow
 import com.projectnexus.iwani.ui.components.interactiveBounceClick
+import com.projectnexus.iwani.ui.components.tutorialSpotlightTarget
 import com.projectnexus.iwani.ui.theme.*
 
 @Composable
@@ -40,6 +44,16 @@ fun EmergencySosScreen(
     val cardBorder = IWaniColors.border(isDarkTheme)
     val textPrim = IWaniColors.textPrimary(isDarkTheme)
     val textSec = IWaniColors.textSecondary(isDarkTheme)
+
+    val listState = rememberLazyListState()
+    val activeTargetId = TutorialSpotlightRegistry.activeTargetId
+    LaunchedEffect(activeTargetId) {
+        when (activeTargetId) {
+            "sos_card_help", "sos_card_medical" -> listState.animateScrollToItem(0)
+            "sos_card_lost", "sos_card_deaf_intro" -> listState.animateScrollToItem(2)
+            "sos_card_police" -> listState.animateScrollToItem(3)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -57,12 +71,18 @@ fun EmergencySosScreen(
                     text = "Emergency SOS",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
-                    color = EmergencyRed
+                    color = EmergencyRed,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.autoSlideIfOverflow()
                 )
                 Text(
                     text = if (isTagalog) "Pindutin ang sitwasyon para iparinig agad sa boses" else "Tap any situation for instant voice broadcast",
                     fontSize = 12.sp,
-                    color = textSec
+                    color = textSec,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.autoSlideIfOverflow()
                 )
             }
 
@@ -114,7 +134,10 @@ fun EmergencySosScreen(
             }
         }
 
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(
+            state = listState,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             items(EmergencyPhrase.standardPhrases) { phrase ->
                 val phraseUtterance = phrase.getUtterance(isTagalog)
                 val phraseTitle = phrase.getTitle(isTagalog)
@@ -128,6 +151,7 @@ fun EmergencySosScreen(
                     cardBorder = cardBorder,
                     textPrim = textPrim,
                     textSec = textSec,
+                    modifier = Modifier.tutorialSpotlightTarget("sos_card_${phrase.id}"),
                     onClick = {
                         if (activeSpeakingUtterance == phraseUtterance) {
                             sosManager.stop()
@@ -155,6 +179,7 @@ fun EmergencyPhraseCard(
     cardBorder: Color,
     textPrim: Color,
     textSec: Color,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Card(
@@ -162,7 +187,7 @@ fun EmergencyPhraseCard(
         colors = CardDefaults.cardColors(
             containerColor = if (isActive) EmergencyRed.copy(alpha = if (isDarkTheme) 0.35f else 0.15f) else cardSurface
         ),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .border(
                 1.dp,
@@ -194,7 +219,10 @@ fun EmergencyPhraseCard(
                     text = title,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
-                    color = textPrim
+                    color = textPrim,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.autoSlideIfOverflow()
                 )
                 Text(
                     text = utterance,

@@ -293,31 +293,21 @@ fun AiModelManagerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // ThinkingOrb while extracting, or Brain icon when idle/ready
+                    // 3D Rotating Cyber-Circuit Brain with moving synaptic lights (2nd pic)
                     Box(
                         modifier = Modifier
-                            .size(50.dp)
+                            .size(52.dp)
                             .background(
-                                if (isQwenExtracted) SuccessGreen.copy(alpha = 0.15f) else primary.copy(alpha = 0.15f),
+                                Color(0xFF0B1528),
                                 RoundedCornerShape(14.dp)
-                            ),
+                            )
+                            .border(1.dp, primary.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (isExtracting) {
-                            ThinkingOrb(
-                                size = 34.dp,
-                                state = "extracting",
-                                primaryColor = primary,
-                                accentColor = accent
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Psychology,
-                                contentDescription = "NLP Brain",
-                                tint = if (isQwenExtracted) SuccessGreen else primary,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
+                        NeuralCircuitBrainOrb(
+                            size = 44.dp,
+                            isExtracting = isExtracting
+                        )
                     }
 
                     Spacer(Modifier.width(14.dp))
@@ -403,12 +393,12 @@ fun AiModelManagerScreen(
 
                 Text(
                     text = if (isTagalog)
-                        "Gumagamit ng Transformer Machine Learning (INT4 neural weights) na sinanay sa istruktura ng wika. Kinukuha nito ang mga FSL sign gloss mula sa camera o quick words (hal. 'TULONG BINGI AKO') at binubuo ito bilang natural at kumpletong pangungusap sa Tagalog at English — 100% offline."
+                        "Offline Transformer ML model na bumubuo ng natural na pangungusap sa Tagalog at English mula sa FSL senyas at quick words."
                     else
-                        "Uses Transformer Machine Learning (INT4 quantized neural weights) trained on bilingual language patterns. It takes raw Filipino Sign Language (FSL) glosses from the camera or quick words (e.g., 'TULONG BINGI AKO') and predicts context and grammar to build natural English and Tagalog sentences — 100% offline.",
+                        "Offline Transformer ML model that turns FSL camera signs and quick words into natural English and Tagalog sentences.",
                     fontSize = 12.sp,
                     color = textSecondary,
-                    lineHeight = 17.5.sp
+                    lineHeight = 17.sp
                 )
 
                 Spacer(Modifier.height(14.dp))
@@ -461,17 +451,16 @@ fun AiModelManagerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // 3D Rotating Molecular Structure with glossy color-changing balls (1st pic)
                     Box(
                         modifier = Modifier
-                            .size(46.dp)
-                            .background(SuccessGreen.copy(alpha = 0.15f), RoundedCornerShape(14.dp)),
+                            .size(52.dp)
+                            .background(Color(0xFF0B1528), RoundedCornerShape(14.dp))
+                            .border(1.dp, SuccessGreen.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Visibility,
-                            contentDescription = "3D Vision",
-                            tint = SuccessGreen,
-                            modifier = Modifier.size(24.dp)
+                        MolecularStructureOrb(
+                            size = 44.dp
                         )
                     }
 
@@ -527,12 +516,12 @@ fun AiModelManagerScreen(
 
                 Text(
                     text = if (isTagalog)
-                        "Pinagsasama ang Computer Vision at Machine Learning: sinusubaybayan ng MediaPipe ang 21 3D hand-knuckle landmarks (X, Y, Z coordinates) sa camera, at ipinapasa ang sukat at anggulo ng kamay sa sinanay na TFLite neural network upang makilala ang FSL alphabet at senyas nang may 97.4% accuracy."
+                        "3D Computer Vision at ML engine na sumusubaybay sa 21 hand landmarks upang makilala ang FSL senyas nang may 97.4% accuracy."
                     else
-                        "Combines Computer Vision and Machine Learning: MediaPipe tracks 21 3D hand-knuckle landmarks (X, Y, Z coordinates) in real time, normalizes hand scale and angle, and feeds the skeletal vectors into our trained TFLite neural network classifier to recognize FSL letters and signs with 97.4% accuracy.",
+                        "3D Computer Vision + ML engine tracking 21 hand landmarks in real time to recognize FSL signs with 97.4% accuracy.",
                     fontSize = 12.sp,
                     color = textSecondary,
-                    lineHeight = 17.5.sp
+                    lineHeight = 17.sp
                 )
             }
         }

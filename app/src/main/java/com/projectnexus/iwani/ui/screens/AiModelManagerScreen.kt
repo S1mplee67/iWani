@@ -293,46 +293,43 @@ fun AiModelManagerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // ThinkingOrb while extracting, or Brain icon when idle/ready
+                    // 3D Rotating Cyber-Circuit Brain with moving synaptic lights (2nd pic)
                     Box(
                         modifier = Modifier
-                            .size(50.dp)
+                            .size(52.dp)
                             .background(
-                                if (isQwenExtracted) SuccessGreen.copy(alpha = 0.15f) else primary.copy(alpha = 0.15f),
+                                Color(0xFF0B1528),
                                 RoundedCornerShape(14.dp)
-                            ),
+                            )
+                            .border(1.dp, primary.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (isExtracting) {
-                            ThinkingOrb(
-                                size = 34.dp,
-                                state = "extracting",
-                                primaryColor = primary,
-                                accentColor = accent
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Psychology,
-                                contentDescription = "NLP Brain",
-                                tint = if (isQwenExtracted) SuccessGreen else primary,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
+                        NeuralCircuitBrainOrb(
+                            size = 44.dp,
+                            isExtracting = isExtracting
+                        )
                     }
 
                     Spacer(Modifier.width(14.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    ) {
                         Text(
                             text = "Qwen2.5-0.5B",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
-                            color = textPrimary
+                            color = textPrimary,
+                            maxLines = 1
                         )
                         Text(
                             text = "Instruct • GGUF INT4 • ~350 MB",
-                            fontSize = 12.sp,
-                            color = textSecondary
+                            fontSize = 11.5.sp,
+                            color = textSecondary,
+                            maxLines = 1,
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                     }
 
@@ -396,9 +393,9 @@ fun AiModelManagerScreen(
 
                 Text(
                     text = if (isTagalog)
-                        "Neural NLP model para sa pagsasalin ng Filipino Sign Language (FSL) sa buong pangungusap at boses nang walang internet."
+                        "Offline Transformer ML model na bumubuo ng natural na pangungusap sa Tagalog at English mula sa FSL senyas at quick words."
                     else
-                        "On-device neural NLP model for translating Filipino Sign Language (FSL) glosses into fluent spoken sentences — 100% offline.",
+                        "Offline Transformer ML model that turns FSL camera signs and quick words into natural English and Tagalog sentences.",
                     fontSize = 12.sp,
                     color = textSecondary,
                     lineHeight = 17.sp
@@ -454,33 +451,39 @@ fun AiModelManagerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // 3D Rotating Molecular Structure with glossy color-changing balls (1st pic)
                     Box(
                         modifier = Modifier
-                            .size(46.dp)
-                            .background(SuccessGreen.copy(alpha = 0.15f), RoundedCornerShape(14.dp)),
+                            .size(52.dp)
+                            .background(Color(0xFF0B1528), RoundedCornerShape(14.dp))
+                            .border(1.dp, SuccessGreen.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Visibility,
-                            contentDescription = "3D Vision",
-                            tint = SuccessGreen,
-                            modifier = Modifier.size(24.dp)
+                        MolecularStructureOrb(
+                            size = 44.dp
                         )
                     }
 
                     Spacer(Modifier.width(14.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    ) {
                         Text(
                             text = "MediaPipe FSL 3D",
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
-                            color = textPrimary
+                            color = textPrimary,
+                            maxLines = 1
                         )
                         Text(
                             text = "21-Joint + 97.4% Neural • ~7.8 MB",
-                            fontSize = 12.sp,
-                            color = textSecondary
+                            fontSize = 11.5.sp,
+                            color = textSecondary,
+                            maxLines = 1,
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                     }
 
@@ -508,6 +511,18 @@ fun AiModelManagerScreen(
                         }
                     }
                 }
+
+                Spacer(Modifier.height(10.dp))
+
+                Text(
+                    text = if (isTagalog)
+                        "3D Computer Vision at ML engine na sumusubaybay sa 21 hand landmarks upang makilala ang FSL senyas nang may 97.4% accuracy."
+                    else
+                        "3D Computer Vision + ML engine tracking 21 hand landmarks in real time to recognize FSL signs with 97.4% accuracy.",
+                    fontSize = 12.sp,
+                    color = textSecondary,
+                    lineHeight = 17.sp
+                )
             }
         }
 

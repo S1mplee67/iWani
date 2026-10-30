@@ -189,7 +189,8 @@ fun HomeScreen(
                         fontWeight = FontWeight.Black,
                         color = textPrimary,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        softWrap = false,
+                        modifier = Modifier.autoSlideIfOverflow()
                     )
                     Text(
                         text = if (isTagalog)
@@ -199,7 +200,8 @@ fun HomeScreen(
                         fontSize = 12.sp,
                         color = textSecondary,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        softWrap = false,
+                        modifier = Modifier.autoSlideIfOverflow()
                     )
                 }
 
@@ -272,7 +274,7 @@ fun HomeScreen(
                                 fontSize = 15.sp,
                                 color = Color(0xFFFDE68A),
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                modifier = Modifier.autoSlideIfOverflow()
                             )
                             Spacer(Modifier.height(2.dp))
                             Text(

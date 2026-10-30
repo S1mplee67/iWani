@@ -61,20 +61,35 @@ fun SettingsScreen(
     var hapticsEnabled by remember { mutableStateOf(UiSoundManager.hapticsEnabled) }
     var selectedProfile by remember { mutableStateOf(UiSoundManager.profile) }
     var soundVolume by remember { mutableFloatStateOf(UiSoundManager.volume) }
+    var fslAcceptanceSeconds by remember { mutableFloatStateOf(UiSoundManager.fslAcceptanceSeconds) }
+
+    val scrollState = rememberScrollState()
+    val activeTargetId = TutorialSpotlightRegistry.activeTargetId
+    LaunchedEffect(activeTargetId) {
+        when (activeTargetId) {
+            "settings_header", "settings_appearance" -> scrollState.animateScrollTo(0)
+            "settings_typography" -> scrollState.animateScrollTo((scrollState.maxValue * 0.28f).toInt())
+            "settings_fsl_speed" -> scrollState.animateScrollTo((scrollState.maxValue * 0.55f).toInt())
+            "settings_sound" -> scrollState.animateScrollTo((scrollState.maxValue * 0.80f).toInt())
+            "settings_ai" -> scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(bg)
             .padding(horizontal = 20.dp)
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(scrollState),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Spacer(Modifier.height(8.dp))
 
         // Header — left Column uses weight(1f) so MetalBadge NEVER wraps or compresses
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .tutorialSpotlightTarget("settings_header"),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -114,7 +129,8 @@ fun SettingsScreen(
             title = if (isTagalog) "Hitsura at Wika" else "Appearance & Language",
             icon = Icons.Default.Palette,
             accentColor = primary,
-            isDarkTheme = isDarkTheme
+            isDarkTheme = isDarkTheme,
+            modifier = Modifier.tutorialSpotlightTarget("settings_appearance")
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -133,7 +149,7 @@ fun SettingsScreen(
                         color = textPrimary
                     )
                     Text(
-                        text = if (isTagalog) "May wave transition kapag pinindot" else "Smooth portfolio wave transition",
+                        text = if (isTagalog) "Lumipat sa pagitan ng Dark Mode at Day Mode" else "Switch between Dark Mode and Day Mode",
                         fontSize = 12.sp,
                         color = textSecondary
                     )
@@ -195,7 +211,8 @@ fun SettingsScreen(
             title = if (isTagalog) "Estilo at Laki ng Font" else "Typography & Font Style",
             icon = Icons.Default.TextFields,
             accentColor = accent,
-            isDarkTheme = isDarkTheme
+            isDarkTheme = isDarkTheme,
+            modifier = Modifier.tutorialSpotlightTarget("settings_typography")
         ) {
             Text(
                 text = if (isTagalog) "Pumili ng Font sa Buong App" else "Select Active Typeface",
@@ -355,12 +372,119 @@ fun SettingsScreen(
             }
         }
 
-        // ================= 3. INTERACTIVE SOUND & HAPTICS =================
+        // ================= 3. FSL ALPHABET ACCEPTANCE SPEED =================
+        SettingsSectionCard(
+            title = if (isTagalog) "Bilis ng Pagtanggap ng FSL Titik" else "FSL Alphabet Acceptance Speed",
+            icon = Icons.Default.Speed,
+            accentColor = Color(0xFF38BDF8),
+            isDarkTheme = isDarkTheme,
+            modifier = Modifier.tutorialSpotlightTarget("settings_fsl_speed")
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
+                    Text(
+                        text = if (isTagalog) "Oras ng Pag-hold sa Senyas" else "Sign Hold Acceptance Time",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = textPrimary
+                    )
+                    Text(
+                        text = if (isTagalog)
+                            "1.0s ang pinakamabilis; pwedeng bagalan hanggang 4.0s (Default: 2.5s sa gitna)"
+                        else
+                            "1.0s is the fastest; slow down up to 4.0s (Default: 2.5s in the middle)",
+                        fontSize = 12.sp,
+                        color = textSecondary
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = accent.copy(alpha = 0.18f),
+                    modifier = Modifier.border(1.dp, accent, RoundedCornerShape(10.dp))
+                ) {
+                    Text(
+                        text = String.format("%.1fs", fslAcceptanceSeconds),
+                        fontWeight = FontWeight.Black,
+                        fontSize = 14.sp,
+                        color = accent,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(6.dp))
+
+            Slider(
+                value = fslAcceptanceSeconds,
+                onValueChange = { raw ->
+                    val stepped = (kotlin.math.round(raw * 2f) / 2f).coerceIn(1.0f, 4.0f)
+                    if (kotlin.math.abs(stepped - fslAcceptanceSeconds) >= 0.1f) {
+                        fslAcceptanceSeconds = stepped
+                        UiSoundManager.fslAcceptanceSeconds = stepped
+                        UiSoundManager.savePrefs(context)
+                        UiSoundManager.playClick(context)
+                    }
+                },
+                valueRange = 1.0f..4.0f,
+                steps = 5,
+                colors = SliderDefaults.colors(
+                    thumbColor = accent,
+                    activeTrackColor = primary,
+                    inactiveTrackColor = border
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val speedPresets = listOf(
+                    1.0f to (if (isTagalog) "1.0s Mabilis" else "1.0s Fastest"),
+                    2.5f to (if (isTagalog) "2.5s Gitna (Default)" else "2.5s Middle (Default)"),
+                    4.0f to (if (isTagalog) "4.0s Mabagal" else "4.0s Slowest")
+                )
+                speedPresets.forEach { (secVal, label) ->
+                    val isSel = kotlin.math.abs(fslAcceptanceSeconds - secVal) < 0.15f
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSel) primary else Color.Transparent,
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(1.dp, if (isSel) primary else border, RoundedCornerShape(12.dp))
+                            .interactiveBounceClick {
+                                fslAcceptanceSeconds = secVal
+                                UiSoundManager.fslAcceptanceSeconds = secVal
+                                UiSoundManager.savePrefs(context)
+                            }
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSel) Color.White else textSecondary,
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier
+                                .padding(horizontal = 6.dp, vertical = 8.dp)
+                                .autoSlideIfOverflow()
+                        )
+                    }
+                }
+            }
+        }
+
+        // ================= 4. INTERACTIVE SOUND & HAPTICS =================
         SettingsSectionCard(
             title = if (isTagalog) "Tunog ng Button at Haptics" else "Interactive Sound & Haptics",
             icon = Icons.AutoMirrored.Filled.VolumeUp,
             accentColor = SuccessGreen,
-            isDarkTheme = isDarkTheme
+            isDarkTheme = isDarkTheme,
+            modifier = Modifier.tutorialSpotlightTarget("settings_sound")
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -453,7 +577,8 @@ fun SettingsScreen(
                                         fontWeight = FontWeight.Bold,
                                         color = if (isSel) textPrimary else textSecondary,
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        softWrap = false,
+                                        modifier = Modifier.autoSlideIfOverflow()
                                     )
                                 }
                             }
@@ -500,13 +625,16 @@ fun SettingsScreen(
                         .padding(end = 10.dp)
                 ) {
                     Text(
-                        text = if (isTagalog) "Haptic Vibration" else "Haptic Tactile Feedback",
+                        text = if (isTagalog) "Haptic Vibration (Button at Boses/TTS)" else "Haptic Tactile & Speech Vibration",
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
                         color = textPrimary
                     )
                     Text(
-                        text = if (isTagalog) "Bahagyang pag-vibrate kapag pumipindot" else "Subtle vibration pulse on button press",
+                        text = if (isTagalog)
+                            "Nagba-vibrate kapag pumipindot at habang nagsasalita ang SOS/TTS, at hihinto pagkatapos"
+                        else
+                            "Vibrates on button clicks & continuously while SOS/TTS is speaking so Deaf users know",
                         fontSize = 12.sp,
                         color = textSecondary
                     )
@@ -537,6 +665,7 @@ fun SettingsScreen(
             backgroundColor = surface,
             modifier = Modifier
                 .fillMaxWidth()
+                .tutorialSpotlightTarget("settings_ai")
                 .interactiveBounceClick { onNavigateToModelManager() }
         ) {
             Row(
@@ -594,22 +723,30 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.chibi_grace),
-                        contentDescription = "Grace",
-                        modifier = Modifier.size(46.dp)
-                    )
-                    Image(
-                        painter = painterResource(id = R.drawable.chibi_kian),
-                        contentDescription = "Kian",
-                        modifier = Modifier.size(46.dp)
-                    )
-                    Image(
-                        painter = painterResource(id = R.drawable.chibi_shouko),
-                        contentDescription = "Shouko",
-                        modifier = Modifier.size(46.dp)
-                    )
-                    Spacer(Modifier.width(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy((-6).dp)) {
+                        ChibiFaceAvatar(
+                            drawableRes = R.drawable.chibi_grace,
+                            contentDescription = "Grace",
+                            size = 42.dp,
+                            borderColor = Color(0xFF38BDF8),
+                            backgroundColor = Color(0xFF0F172A)
+                        )
+                        ChibiFaceAvatar(
+                            drawableRes = R.drawable.chibi_kian,
+                            contentDescription = "Kian",
+                            size = 42.dp,
+                            borderColor = Color(0xFFFBBF24),
+                            backgroundColor = Color(0xFF0F172A)
+                        )
+                        ChibiFaceAvatar(
+                            drawableRes = R.drawable.chibi_shouko,
+                            contentDescription = "Shouko",
+                            size = 42.dp,
+                            borderColor = Color(0xFFF472B6),
+                            backgroundColor = Color(0xFF0F172A)
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = if (isTagalog) "Gabay sa App (Grace, Kian & Shouko)" else "Chibi Mascot Guide (Grace, Kian & Shouko)",
@@ -767,6 +904,7 @@ private fun SettingsSectionCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     accentColor: Color,
     isDarkTheme: Boolean,
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val surface = IWaniColors.surface(isDarkTheme)
@@ -776,7 +914,7 @@ private fun SettingsSectionCard(
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = surface,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .border(1.dp, border, RoundedCornerShape(20.dp))
     ) {
@@ -797,7 +935,8 @@ private fun SettingsSectionCard(
                     fontSize = 15.sp,
                     color = textPrimary,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    softWrap = false,
+                    modifier = Modifier.autoSlideIfOverflow()
                 )
             }
             Spacer(Modifier.height(14.dp))

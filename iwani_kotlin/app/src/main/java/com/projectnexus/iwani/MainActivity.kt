@@ -16,6 +16,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,7 +37,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -48,6 +53,7 @@ import androidx.navigation.compose.rememberNavController
 import com.projectnexus.iwani.emergency.EmergencySosManager
 import com.projectnexus.iwani.ui.components.ChibiMascotTutorialDialog
 import com.projectnexus.iwani.ui.components.TeamFeedbackInboxDialog
+import com.projectnexus.iwani.ui.components.autoSlideIfOverflow
 import com.projectnexus.iwani.ui.components.interactiveBounceClick
 import com.projectnexus.iwani.ui.components.tutorialSpotlightTarget
 import com.projectnexus.iwani.ui.screens.*
@@ -79,12 +85,8 @@ class MainActivity : ComponentActivity() {
             var fontStyle by remember { mutableStateOf(initialFontStyle) }
             var fontScale by remember { mutableFloatStateOf(initialFontScale) }
 
-            // Smooth color interpolation across all theme tokens
-            val currentBg by animateColorAsState(
-                targetValue = IWaniColors.background(isDarkTheme),
-                animationSpec = tween(500, easing = FastOutSlowInEasing),
-                label = "currentBg"
-            )
+            // Clean background without muddy mid-gray interpolation during Day/Night switches
+            val currentBg = IWaniColors.solidBackground(isDarkTheme)
             val currentSurface by animateColorAsState(
                 targetValue = IWaniColors.surface(isDarkTheme),
                 animationSpec = tween(500, easing = FastOutSlowInEasing),
@@ -118,18 +120,43 @@ class MainActivity : ComponentActivity() {
                 label = "themeIconRotation"
             )
 
-            // Portfolio Circular Wave Reveal Overlay during Theme Transition
+            // 3 Full-Screen Theme Transitions (below text/UI), cycling to the next transition every 2 switch clicks:
+            // Clicks 1 & 2 -> Transition 0 (Circular Wave Reveal)
+            // Clicks 3 & 4 -> Transition 1 (Diagonal Prism Laser Curtain)
+            // Clicks 5 & 6 -> Transition 2 (Center Supernova Iris Portal)
+            // Clicks 7 & 8 -> Back to Transition 0 (Circular Wave Reveal)
             val themeWaveProgress = remember { Animatable(1f) }
             var previousThemeState by remember { mutableStateOf(isDarkTheme) }
+            var themeSwitchCount by remember { mutableIntStateOf(0) }
+            var activeTransitionType by remember { mutableIntStateOf(0) }
+
+            // Synchronous Frame-1 detection: prevents any 1-millisecond flinch before LaunchedEffect starts!
+            val isThemeJustChanged = previousThemeState != isDarkTheme
+            val effectiveWaveProgress = if (isThemeJustChanged) 0f else themeWaveProgress.value
+            val isWaveActive = isThemeJustChanged || effectiveWaveProgress < 1f
+            val currentTransitionType = if (isThemeJustChanged) (themeSwitchCount / 2) % 3 else activeTransitionType
+
+            // Synchronously update IWaniColors blend fraction every frame so cards and TopAppBar never snap ahead of the wave
+            IWaniColors.isWaveTransitionActive = isWaveActive
+            IWaniColors.darkFraction = if (isWaveActive) {
+                if (isDarkTheme) effectiveWaveProgress else (1f - effectiveWaveProgress)
+            } else {
+                if (isDarkTheme) 1f else 0f
+            }
 
             LaunchedEffect(isDarkTheme) {
                 if (previousThemeState != isDarkTheme) {
-                    previousThemeState = isDarkTheme
+                    activeTransitionType = (themeSwitchCount / 2) % 3
+                    themeSwitchCount += 1
+                    IWaniColors.isWaveTransitionActive = true
                     themeWaveProgress.snapTo(0f)
+                    previousThemeState = isDarkTheme
                     themeWaveProgress.animateTo(
                         targetValue = 1f,
-                        animationSpec = tween(durationMillis = 650, easing = CubicBezierEasing(0.2f, 0.8f, 0.25f, 1f))
+                        animationSpec = tween(durationMillis = 760, easing = CubicBezierEasing(0.22f, 0.82f, 0.25f, 1f))
                     )
+                    IWaniColors.isWaveTransitionActive = false
+                    IWaniColors.darkFraction = if (isDarkTheme) 1f else 0f
                 }
             }
 
@@ -148,7 +175,9 @@ class MainActivity : ComponentActivity() {
                             onFinish = { showIntro = false }
                         )
                     } else {
-                        Box(modifier = Modifier.fillMaxSize()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize()
+                        ) {
                             val navController = rememberNavController()
                             val context = this@MainActivity
                             val prefs = remember { context.getSharedPreferences("iwani_ai_prefs", Context.MODE_PRIVATE) }
@@ -172,10 +201,151 @@ class MainActivity : ComponentActivity() {
                             }
 
                             val isTagalog = appLanguage.isTagalog
+                            val density = LocalDensity.current
+
+                            // Unified Full-Screen Background Layer (rendered BELOW TopAppBar, Scaffold, and all text/UI)
+                            Canvas(
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                if (!isWaveActive) {
+                                    drawRect(color = IWaniColors.solidBackground(isDarkTheme))
+                                } else {
+                                    val p = effectiveWaveProgress
+                                    val oldBgColor = if (isDarkTheme) Color(0xFFF8FAFC) else DarkBackground
+                                    val newBgColor = if (isDarkTheme) DarkBackground else Color(0xFFF8FAFC)
+                                    val crestColor = if (isDarkTheme) IcctGold else TealPrimary
+                                    val secondaryCrest = if (isDarkTheme) Color(0xFF38BDF8) else Color(0xFFF59E0B)
+
+                                    // 1. Base old theme background (starts at 100% on Frame 1 -> zero flinch!)
+                                    drawRect(color = oldBgColor)
+
+                                    when (currentTransitionType) {
+                                        0 -> {
+                                            // TRANSITION 1 (Switches 1 & 2): Classic Circular Wave Reveal from Top-Right Toggle
+                                            val origin = Offset(size.width - 36f * density.density, 42f * density.density)
+                                            val maxR = kotlin.math.hypot(size.width.toDouble(), size.height.toDouble()).toFloat() * 1.06f
+                                            val r = p * maxR
+
+                                            drawCircle(
+                                                color = newBgColor,
+                                                radius = r,
+                                                center = origin
+                                            )
+                                            if (p in 0.01f..0.99f) {
+                                                drawCircle(
+                                                    color = crestColor.copy(alpha = (1f - p) * 0.85f),
+                                                    radius = r,
+                                                    center = origin,
+                                                    style = Stroke(width = 8f)
+                                                )
+                                                drawCircle(
+                                                    color = secondaryCrest.copy(alpha = (1f - p) * 0.45f),
+                                                    radius = (r - 14f).coerceAtLeast(1f),
+                                                    center = origin,
+                                                    style = Stroke(width = 16f)
+                                                )
+                                            }
+                                        }
+
+                                        1 -> {
+                                            // TRANSITION 2 (Switches 3 & 4): Diagonal Cyber Prism Curtain Sweep (Top-Right -> Bottom-Left)
+                                            val w = size.width
+                                            val h = size.height
+                                            val totalSpan = w + h
+                                            val dist = p * totalSpan * 1.08f
+                                            // Diagonal line: (w - x) + y = dist  =>  y = dist - (w - x) = x - w + dist
+                                            val xTop = (w - dist).coerceIn(-h, w)
+                                            val yRight = dist.coerceIn(0f, h + w)
+
+                                            val sweepPath = Path().apply {
+                                                moveTo(w, 0f)
+                                                if (dist <= w) {
+                                                    lineTo(w - dist, 0f)
+                                                } else {
+                                                    lineTo(0f, 0f)
+                                                    lineTo(0f, (dist - w).coerceAtMost(h))
+                                                }
+                                                if (dist <= h) {
+                                                    lineTo(w, dist)
+                                                } else {
+                                                    lineTo((w - (dist - h)).coerceAtLeast(0f), h)
+                                                    lineTo(w, h)
+                                                }
+                                                close()
+                                            }
+                                            drawPath(path = sweepPath, color = newBgColor)
+
+                                            if (p in 0.01f..0.99f) {
+                                                val pStart = if (dist <= w) Offset(w - dist, 0f) else Offset(0f, dist - w)
+                                                val pEnd = if (dist <= h) Offset(w, dist) else Offset(w - (dist - h), h)
+                                                drawLine(
+                                                    color = crestColor.copy(alpha = (1f - p * 0.6f).coerceIn(0f, 1f)),
+                                                    start = pStart,
+                                                    end = pEnd,
+                                                    strokeWidth = 10f
+                                                )
+                                                drawLine(
+                                                    color = secondaryCrest.copy(alpha = (1f - p * 0.7f).coerceIn(0f, 1f) * 0.55f),
+                                                    start = Offset(pStart.x + 12f, pStart.y - 12f),
+                                                    end = Offset(pEnd.x + 12f, pEnd.y - 12f),
+                                                    strokeWidth = 22f
+                                                )
+                                                val _unused = xTop + yRight
+                                            }
+                                        }
+
+                                        else -> {
+                                            // TRANSITION 3 (Switches 5 & 6): Center Supernova Diamond + Shockwave Iris Portal
+                                            val center = Offset(size.width * 0.5f, size.height * 0.5f)
+                                            val maxR = kotlin.math.hypot(size.width.toDouble() * 0.5, size.height.toDouble() * 0.5).toFloat() * 1.35f
+                                            val r = p * maxR
+                                            val rot = p * (PI.toFloat() * 0.65f)
+
+                                            // Expanding 8-point Star-Octagon Portal
+                                            val portalPath = Path().apply {
+                                                val sides = 8
+                                                for (i in 0 until sides) {
+                                                    val a = rot + (i * 2f * PI / sides).toFloat()
+                                                    val rad = if (i % 2 == 0) r * 1.08f else r * 0.92f
+                                                    val px = center.x + cos(a) * rad
+                                                    val py = center.y + sin(a) * rad
+                                                    if (i == 0) moveTo(px, py) else lineTo(px, py)
+                                                }
+                                                close()
+                                            }
+                                            drawPath(path = portalPath, color = newBgColor)
+
+                                            if (p in 0.01f..0.99f) {
+                                                drawPath(
+                                                    path = portalPath,
+                                                    color = crestColor.copy(alpha = (1f - p) * 0.9f),
+                                                    style = Stroke(width = 8f)
+                                                )
+                                                drawCircle(
+                                                    color = secondaryCrest.copy(alpha = (1f - p) * 0.5f),
+                                                    radius = r * 0.85f,
+                                                    center = center,
+                                                    style = Stroke(width = 14f)
+                                                )
+                                                for (i in 0 until 8) {
+                                                    val a = -rot * 1.4f + (i * 2f * PI / 8f).toFloat()
+                                                    val sx = center.x + cos(a) * r
+                                                    val sy = center.y + sin(a) * r
+                                                    drawCircle(
+                                                        color = crestColor.copy(alpha = (1f - p) * 0.95f),
+                                                        radius = 7f,
+                                                        center = Offset(sx, sy)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
 
                             Scaffold(
                                 modifier = Modifier.blur(if (showMascotTutorial && blurAppBackground) 8.dp else 0.dp),
-                                containerColor = currentBg,
+                                containerColor = Color.Transparent,
                                 topBar = {
                                     // Uncrowded Minimalist TopAppBar — prevents any text wrapping
                                     TopAppBar(
@@ -316,13 +486,14 @@ class MainActivity : ComponentActivity() {
                                             }
                                         },
                                         colors = TopAppBarDefaults.topAppBarColors(
-                                            containerColor = currentBg
+                                            containerColor = Color.Transparent,
+                                            scrolledContainerColor = Color.Transparent
                                         )
                                     )
                                 },
                                 bottomBar = {
                                     NavigationBar(
-                                        containerColor = currentBg,
+                                        containerColor = Color.Transparent,
                                         tonalElevation = 0.dp
                                     ) {
                                         val navColors = NavigationBarItemDefaults.colors(
@@ -335,7 +506,7 @@ class MainActivity : ComponentActivity() {
 
                                         NavigationBarItem(
                                             icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                                            label = { Text("Home", fontSize = 11.sp) },
+                                            label = { Text("Home", fontSize = 11.sp, maxLines = 1, softWrap = false, modifier = Modifier.autoSlideIfOverflow()) },
                                             selected = currentRoute == "home",
                                             colors = navColors,
                                             onClick = {
@@ -346,7 +517,7 @@ class MainActivity : ComponentActivity() {
                                         )
                                         NavigationBarItem(
                                             icon = { Icon(Icons.Default.Videocam, contentDescription = "Camera") },
-                                            label = { Text(if (isTagalog) "Kamera" else "Camera", fontSize = 11.sp) },
+                                            label = { Text(if (isTagalog) "Kamera" else "Camera", fontSize = 11.sp, maxLines = 1, softWrap = false, modifier = Modifier.autoSlideIfOverflow()) },
                                             selected = currentRoute == "camera",
                                             colors = navColors,
                                             onClick = {
@@ -357,7 +528,7 @@ class MainActivity : ComponentActivity() {
                                         )
                                         NavigationBarItem(
                                             icon = { Icon(Icons.Default.Campaign, contentDescription = "SOS") },
-                                            label = { Text("SOS", fontSize = 11.sp) },
+                                            label = { Text("SOS", fontSize = 11.sp, maxLines = 1, softWrap = false, modifier = Modifier.autoSlideIfOverflow()) },
                                             selected = currentRoute == "sos",
                                             colors = navColors,
                                             onClick = {
@@ -368,7 +539,7 @@ class MainActivity : ComponentActivity() {
                                         )
                                         NavigationBarItem(
                                             icon = { Icon(Icons.Default.Forum, contentDescription = "Translate") },
-                                            label = { Text(if (isTagalog) "Salin" else "Translate", fontSize = 11.sp) },
+                                            label = { Text(if (isTagalog) "Salin" else "Translate", fontSize = 11.sp, maxLines = 1, softWrap = false, modifier = Modifier.autoSlideIfOverflow()) },
                                             selected = currentRoute == "translate",
                                             colors = navColors,
                                             onClick = {
@@ -379,7 +550,7 @@ class MainActivity : ComponentActivity() {
                                         )
                                         NavigationBarItem(
                                             icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-                                            label = { Text(if (isTagalog) "Setting" else "Settings", fontSize = 11.sp) },
+                                            label = { Text("Settings", fontSize = 11.sp, maxLines = 1, softWrap = false, modifier = Modifier.autoSlideIfOverflow()) },
                                             selected = currentRoute == "settings",
                                             colors = navColors,
                                             onClick = {
@@ -524,42 +695,6 @@ class MainActivity : ComponentActivity() {
                                                 currentRoute = "home"
                                                 navController.popBackStack()
                                             }
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Portfolio Wave Reveal Overlay during Theme Transition
-                            if (themeWaveProgress.value < 1f) {
-                                val p = themeWaveProgress.value
-                                val waveColor = if (isDarkTheme) DarkBackground else Color(0xFFF8FAFC)
-                                val crestColor = if (isDarkTheme) IcctGold else TealPrimary
-                                val density = LocalDensity.current
-
-                                Canvas(
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
-                                    val origin = Offset(size.width - 36f * density.density, 42f * density.density)
-                                    val maxR = kotlin.math.hypot(size.width.toDouble(), size.height.toDouble()).toFloat() * 1.05f
-                                    val r = p * maxR
-
-                                    drawCircle(
-                                        color = waveColor,
-                                        radius = r,
-                                        center = origin
-                                    )
-                                    if (p in 0.02f..0.98f) {
-                                        drawCircle(
-                                            color = crestColor.copy(alpha = (1f - p) * 0.8f),
-                                            radius = r,
-                                            center = origin,
-                                            style = Stroke(width = 8f)
-                                        )
-                                        drawCircle(
-                                            color = crestColor.copy(alpha = (1f - p) * 0.35f),
-                                            radius = r + 4f,
-                                            center = origin,
-                                            style = Stroke(width = 16f)
                                         )
                                     }
                                 }

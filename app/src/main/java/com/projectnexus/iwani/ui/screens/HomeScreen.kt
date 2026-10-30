@@ -155,11 +155,19 @@ fun HomeScreen(
             )
         }
 
+        val scrollState = rememberScrollState()
+        LaunchedEffect(TutorialSpotlightRegistry.activeTargetId) {
+            val activeId = TutorialSpotlightRegistry.activeTargetId
+            if (activeId != null && (activeId.startsWith("home_") || activeId.startsWith("top_bar_"))) {
+                scrollState.animateScrollTo(0)
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Spacer(modifier = Modifier.height(6.dp))
@@ -181,7 +189,8 @@ fun HomeScreen(
                         fontWeight = FontWeight.Black,
                         color = textPrimary,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        softWrap = false,
+                        modifier = Modifier.autoSlideIfOverflow()
                     )
                     Text(
                         text = if (isTagalog)
@@ -191,7 +200,8 @@ fun HomeScreen(
                         fontSize = 12.sp,
                         color = textSecondary,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        softWrap = false,
+                        modifier = Modifier.autoSlideIfOverflow()
                     )
                 }
 
@@ -207,6 +217,7 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(184.dp)
+                    .tutorialSpotlightTarget("home_hero_carousel")
                     .clip(RoundedCornerShape(24.dp))
                     .border(1.dp, border, RoundedCornerShape(24.dp))
                     .interactiveBounceClick {
@@ -263,7 +274,7 @@ fun HomeScreen(
                                 fontSize = 15.sp,
                                 color = Color(0xFFFDE68A),
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                modifier = Modifier.autoSlideIfOverflow()
                             )
                             Spacer(Modifier.height(2.dp))
                             Text(
@@ -307,6 +318,7 @@ fun HomeScreen(
                 color = surface,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .tutorialSpotlightTarget("home_walkthrough_banner")
                     .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
                     .interactiveBounceClick { onOpenMascotTutorial() }
             ) {
@@ -316,16 +328,21 @@ fun HomeScreen(
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = painterResource(id = R.drawable.chibi_grace),
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        ChibiFaceAvatar(
+                            drawableRes = R.drawable.chibi_grace,
                             contentDescription = "Grace Chibi",
-                            modifier = Modifier.size(44.dp)
+                            size = 38.dp,
+                            borderColor = Color(0xFF38BDF8).copy(alpha = 0.7f)
                         )
-                        Image(
-                            painter = painterResource(id = R.drawable.chibi_kian),
+                        ChibiFaceAvatar(
+                            drawableRes = R.drawable.chibi_kian,
                             contentDescription = "Kian Chibi",
-                            modifier = Modifier.size(44.dp)
+                            size = 38.dp,
+                            borderColor = Color(0xFFF59E0B).copy(alpha = 0.7f)
                         )
                     }
                     Spacer(Modifier.width(10.dp))
@@ -383,60 +400,67 @@ fun HomeScreen(
             }
 
             // ================= 4. MINIMALIST 2x2 BENTO GRID =================
-            Text(
-                text = if (isTagalog) "MGA PANGUNAHING FEATURE" else "CORE WORKSPACE",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 1.5.sp,
-                color = textSecondary
-            )
-
-            // Row 1: FSL Camera (with stationary BorderBeam highlight) + AI Translate
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tutorialSpotlightTarget("home_core_workspace"),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                BorderBeamBox(
-                    active = true,
-                    cornerRadius = 22.dp,
-                    beamColor = primary,
-                    secondaryColor = accent,
-                    baseBorderColor = border,
-                    backgroundColor = surface,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(150.dp)
-                        .interactiveBounceClick { onNavigateToCamera() }
-                ) {
-                    BentoTileContent(
-                        icon = Icons.Default.Videocam,
-                        badge = "97.4% AI",
-                        title = if (isTagalog) "FSL Kamera" else "FSL Camera",
-                        subtitle = if (isTagalog) "Live 26-titik 3D hand tracking" else "Live 26-letter 3D hand vision",
-                        accentColor = primary,
-                        textPrimary = textPrimary,
-                        textSecondary = textSecondary
-                    )
-                }
+                Text(
+                    text = if (isTagalog) "MGA PANGUNAHING FEATURE" else "CORE WORKSPACE",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.5.sp,
+                    color = textSecondary
+                )
 
-                Surface(
-                    shape = RoundedCornerShape(22.dp),
-                    color = surface,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(150.dp)
-                        .border(1.dp, border, RoundedCornerShape(22.dp))
-                        .interactiveBounceClick { onNavigateToTranslate() }
+                // Row 1: FSL Camera (with stationary BorderBeam highlight) + AI Translate
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    BentoTileContent(
-                        icon = Icons.Default.Forum,
-                        badge = "QWEN 2.5",
-                        title = if (isTagalog) "Pagsasalin" else "Translate",
-                        subtitle = if (isTagalog) "Quick words patungong boses" else "Quick words to spoken voice",
-                        accentColor = accent,
-                        textPrimary = textPrimary,
-                        textSecondary = textSecondary
-                    )
+                    BorderBeamBox(
+                        active = true,
+                        cornerRadius = 22.dp,
+                        beamColor = primary,
+                        secondaryColor = accent,
+                        baseBorderColor = border,
+                        backgroundColor = surface,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(150.dp)
+                            .interactiveBounceClick { onNavigateToCamera() }
+                    ) {
+                        BentoTileContent(
+                            icon = Icons.Default.Videocam,
+                            badge = "97.4% AI",
+                            title = if (isTagalog) "FSL Kamera" else "FSL Camera",
+                            subtitle = if (isTagalog) "Live 26-titik 3D hand tracking" else "Live 26-letter 3D hand vision",
+                            accentColor = primary,
+                            textPrimary = textPrimary,
+                            textSecondary = textSecondary
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(22.dp),
+                        color = surface,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(150.dp)
+                            .border(1.dp, border, RoundedCornerShape(22.dp))
+                            .interactiveBounceClick { onNavigateToTranslate() }
+                    ) {
+                        BentoTileContent(
+                            icon = Icons.Default.Forum,
+                            badge = "QWEN 2.5",
+                            title = if (isTagalog) "Pagsasalin" else "Translate",
+                            subtitle = if (isTagalog) "Quick words patungong boses" else "Quick words to spoken voice",
+                            accentColor = accent,
+                            textPrimary = textPrimary,
+                            textSecondary = textSecondary
+                        )
+                    }
                 }
             }
 

@@ -7,7 +7,12 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.DeviceFontFamilyName
@@ -74,13 +79,20 @@ private val ClassicLightColorScheme = lightColorScheme(
 )
 
 object IWaniColors {
-    fun background(isDark: Boolean) = if (isDark) DarkBackground else Color(0xFFF8FAFC)
-    fun surface(isDark: Boolean) = if (isDark) DarkSurfaceGlass else Color.White
-    fun border(isDark: Boolean) = if (isDark) DarkSurfaceBorder else Color(0xFFE2E8F0)
-    fun textPrimary(isDark: Boolean) = if (isDark) TextPrimary else Color(0xFF0F172A)
-    fun textSecondary(isDark: Boolean) = if (isDark) TextSecondary else Color(0xFF64748B)
-    fun accent(isDark: Boolean) = if (isDark) IcctGold else TealPrimary
-    fun primary(isDark: Boolean) = if (isDark) IcctBlue else TealPrimary
+    var isWaveTransitionActive by mutableStateOf(false)
+    var darkFraction by mutableFloatStateOf(1f)
+
+    private fun resolveFraction(isDark: Boolean): Float =
+        if (isWaveTransitionActive) darkFraction else if (isDark) 1f else 0f
+
+    fun solidBackground(isDark: Boolean) = if (isDark) DarkBackground else Color(0xFFF8FAFC)
+    fun background(isDark: Boolean) = Color.Transparent
+    fun surface(isDark: Boolean) = lerp(Color.White, DarkSurfaceGlass, resolveFraction(isDark))
+    fun border(isDark: Boolean) = lerp(Color(0xFFE2E8F0), DarkSurfaceBorder, resolveFraction(isDark))
+    fun textPrimary(isDark: Boolean) = lerp(Color(0xFF0F172A), TextPrimary, resolveFraction(isDark))
+    fun textSecondary(isDark: Boolean) = lerp(Color(0xFF64748B), TextSecondary, resolveFraction(isDark))
+    fun accent(isDark: Boolean) = lerp(TealPrimary, IcctGold, resolveFraction(isDark))
+    fun primary(isDark: Boolean) = lerp(TealPrimary, IcctBlue, resolveFraction(isDark))
 }
 
 fun buildAppTypography(fontStyle: AppFontStyle, scale: Float = 1.0f): Typography {

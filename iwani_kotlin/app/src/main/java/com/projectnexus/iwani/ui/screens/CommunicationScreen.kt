@@ -32,6 +32,7 @@ import com.projectnexus.iwani.ui.components.TutorialSpotlightRegistry
 import com.projectnexus.iwani.ui.components.autoSlideIfOverflow
 import com.projectnexus.iwani.ui.components.interactiveBounceClick
 import com.projectnexus.iwani.ui.components.tutorialSpotlightTarget
+import com.projectnexus.iwani.ui.sound.UiSoundManager
 import com.projectnexus.iwani.ui.theme.*
 
 enum class GlossCategory {
@@ -180,7 +181,9 @@ fun CommunicationScreen(
             text = if (isTagalog) "Komunikasyon at Pagsasalin" else "Communication & Translation",
             fontSize = 24.sp,
             fontWeight = FontWeight.Black,
-            color = textPrimary
+            color = textPrimary,
+            maxLines = 1,
+            modifier = Modifier.autoSlideIfOverflow()
         )
         Text(
             text = if (isTagalog)
@@ -189,7 +192,10 @@ fun CommunicationScreen(
                 "Tap frequently used quick words or type below for natural speech",
             fontSize = 12.5.sp,
             color = textSecondary,
-            modifier = Modifier.padding(top = 3.dp, bottom = 12.dp)
+            maxLines = 1,
+            modifier = Modifier
+                .padding(top = 3.dp, bottom = 12.dp)
+                .autoSlideIfOverflow()
         )
 
         // ================= TOP CATEGORY BAR (WITH FREQUENTLY USED ON TOP) =================
@@ -203,7 +209,9 @@ fun CommunicationScreen(
                 fontSize = 10.5.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 1.1.sp,
-                color = accent
+                color = accent,
+                maxLines = 1,
+                modifier = Modifier.autoSlideIfOverflow()
             )
             Spacer(Modifier.height(6.dp))
 
@@ -274,7 +282,7 @@ fun CommunicationScreen(
                     }
                 )
                 CategoryChipItem(
-                    label = if (isTagalog) "Paaralan (ICCT)" else "Campus & School",
+                    label = if (isTagalog) "Paaralan" else "School",
                     selected = selectedCategory == GlossCategory.CAMPUS,
                     activeColor = Color(0xFF6366F1),
                     activeTextColor = Color.White,
@@ -313,7 +321,9 @@ fun CommunicationScreen(
                 fontSize = 10.5.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 1.1.sp,
-                color = textSecondary
+                color = textSecondary,
+                maxLines = 1,
+                modifier = Modifier.autoSlideIfOverflow()
             )
             Spacer(Modifier.height(6.dp))
 
@@ -352,11 +362,11 @@ fun CommunicationScreen(
 
         Spacer(Modifier.height(14.dp))
 
-        // ================= OUTPUT BOX (FORMERLY "FSL Sign Gloss Senyas") =================
+        // ================= INPUT BOX =================
         OutlinedTextField(
             value = inputText,
             onValueChange = { inputText = it },
-            label = { Text("Output") },
+            label = { Text(if (isTagalog) "Mag-input dito" else "Input here") },
             placeholder = {
                 Text(
                     if (isTagalog)
@@ -367,10 +377,13 @@ fun CommunicationScreen(
             },
             trailingIcon = {
                 if (inputText.isNotEmpty()) {
-                    IconButton(onClick = { inputText = "" }) {
+                    IconButton(onClick = {
+                        UiSoundManager.playClick(context)
+                        inputText = ""
+                    }) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Clear Output",
+                            contentDescription = "Clear Input",
                             tint = textSecondary
                         )
                     }
@@ -428,7 +441,8 @@ fun CommunicationScreen(
                             color = accent,
                             letterSpacing = 0.8.sp,
                             maxLines = 1,
-                            softWrap = false
+                            softWrap = false,
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                     }
 
@@ -471,6 +485,7 @@ fun CommunicationScreen(
                 ) {
                     Button(
                         onClick = {
+                            UiSoundManager.playClick(context)
                             val toSpeak = translatedText.ifBlank { inputText }
                             if (toSpeak.isNotBlank()) {
                                 sosManager.speak(toSpeak)
@@ -509,6 +524,7 @@ fun CommunicationScreen(
 
                     OutlinedButton(
                         onClick = {
+                            UiSoundManager.playClick(context)
                             val toCopy = translatedText.ifBlank { inputText }
                             if (toCopy.isNotBlank()) {
                                 clipboardManager.setText(AnnotatedString(toCopy))
@@ -565,9 +581,13 @@ private fun CategoryChipItem(
     textSecondary: Color,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
     FilterChip(
         selected = selected,
-        onClick = onClick,
+        onClick = {
+            UiSoundManager.playClick(context)
+            onClick()
+        },
         label = {
             Text(
                 text = label,

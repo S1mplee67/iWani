@@ -18,26 +18,35 @@ import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarkerResult
+import com.projectnexus.iwani.ui.sound.UiSoundManager
+import java.util.Optional
 
 class FslCameraAnalyzer(
     context: Context,
+    private val onFrame: ((Bitmap) -> Unit)? = null,
     private val onResult: (letter: String, confidence: Float, landmarks: List<NormalizedLandmark>?, committed: Boolean) -> Unit
 ) : ImageAnalysis.Analyzer {
 
     private val TAG = "FslCameraAnalyzer"
-    private val classifier = FslClassifier(context)
+    private val appContext = context.applicationContext
+    private val classifier = FslClassifier(appContext)
     private var handLandmarker: HandLandmarker? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    // Majority voting smoothing (15 frames)
+    // Exponential Moving Average (EMA) state for smooth 21-joint hand tracing
+    private var smoothedCoords: FloatArray? = null
+    private val EMA_ALPHA = 0.64f
+
+    // Time-based & majority-smoothed letter acceptance (configurable 1.0s Fastest .. 4.0s Slowest, default 2.5s Middle)
     private val voteHistory = mutableListOf<String>()
-    private val VOTE_WINDOW = 15
-    private val COMMIT_THRESHOLD = 9
+    private val VOTE_WINDOW = 11
+    private var activeHoldLetter = ""
+    private var holdStartTimeMs = 0L
+    private var lastValidFrameTimeMs = 0L
     private var lastCommitTime = 0L
-    private val COMMIT_COOLDOWN_MS = 1200L
 
     init {
-        setupHandLandmarker(context)
+        setupHandLandmarker(appContext)
     }
 
     private fun setupHandLandmarker(context: Context) {
@@ -48,8 +57,9 @@ class FslCameraAnalyzer(
 
             val options = HandLandmarker.HandLandmarkerOptions.builder()
                 .setBaseOptions(baseOptions)
-                .setMinHandDetectionConfidence(0.3f)
-                .setMinHandPresenceConfidence(0.3f)
+                .setMinHandDetectionConfidence(0.35f)
+                .setMinHandPresenceConfidence(0.35f)
+                .setMinTrackingConfidence(0.35f)
                 .setNumHands(1)
                 .setRunningMode(RunningMode.LIVE_STREAM)
                 .setResultListener { result: HandLandmarkerResult, _: MPImage ->
@@ -76,7 +86,6 @@ class FslCameraAnalyzer(
             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
             val bitmap = imageProxy.toBitmap()
 
-            // Rotate if necessary to match device portrait orientation
             val rotatedBitmap = if (rotationDegrees != 0) {
                 val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
                 Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
@@ -86,43 +95,101 @@ class FslCameraAnalyzer(
 
             val mpImage = BitmapImageBuilder(rotatedBitmap).build()
             handLandmarker?.detectAsync(mpImage, frameTime)
+            onFrame?.invoke(rotatedBitmap)
         }
 
         imageProxy.close()
     }
 
+    private fun smoothLandmarks(raw: List<NormalizedLandmark>): List<NormalizedLandmark> {
+        if (raw.size < 21) return raw
+        val prev = smoothedCoords
+        if (prev == null || prev.size != 63) {
+            val initArr = FloatArray(63)
+            for (i in 0 until 21) {
+                initArr[i * 3] = raw[i].x()
+                initArr[i * 3 + 1] = raw[i].y()
+                initArr[i * 3 + 2] = raw[i].z()
+            }
+            smoothedCoords = initArr
+            return raw
+        }
+
+        val smoothedList = ArrayList<NormalizedLandmark>(21)
+        for (i in 0 until 21) {
+            val sx = EMA_ALPHA * raw[i].x() + (1f - EMA_ALPHA) * prev[i * 3]
+            val sy = EMA_ALPHA * raw[i].y() + (1f - EMA_ALPHA) * prev[i * 3 + 1]
+            val sz = EMA_ALPHA * raw[i].z() + (1f - EMA_ALPHA) * prev[i * 3 + 2]
+            prev[i * 3] = sx
+            prev[i * 3 + 1] = sy
+            prev[i * 3 + 2] = sz
+            smoothedList.add(
+                NormalizedLandmark.create(
+                    sx,
+                    sy,
+                    sz,
+                    Optional.empty(),
+                    Optional.empty()
+                )
+            )
+        }
+        return smoothedList
+    }
+
     private fun processLandmarks(result: HandLandmarkerResult) {
+        val now = SystemClock.uptimeMillis()
         val landmarksList = result.landmarks()
-        if (landmarksList.isNotEmpty() && landmarksList[0].isNotEmpty()) {
-            val landmarks = landmarksList[0]
-            val features = classifier.normalizeLandmarks(landmarks)
-            val classification = classifier.classify(features)
+        if (landmarksList.isNotEmpty() && landmarksList[0].size >= 21) {
+            val smoothed = smoothLandmarks(landmarksList[0])
+            val classification = classifier.classifyLandmarks(smoothed)
+
+            // Configurable acceptance duration: 1.0s (Fastest/current) up to 4.0s (Slowest), default 2.5s (Middle)
+            val configuredSec = UiSoundManager.fslAcceptanceSeconds.coerceIn(1.0f, 4.0f)
+            val requiredHoldMs = if (configuredSec <= 1.05f) 850L else (configuredSec * 1000f).toLong()
+            val cooldownMs = maxOf(800L, (requiredHoldMs * 0.45f).toLong())
 
             var isCommitted = false
-            if (classification.confidence >= 0.45f) {
+            var displayLetter = classification.letter
+
+            if (classification.confidence >= 0.40f) {
+                lastValidFrameTimeMs = now
                 voteHistory.add(classification.letter)
                 if (voteHistory.size > VOTE_WINDOW) {
                     voteHistory.removeAt(0)
                 }
 
-                // Majority voting
-                val counts = voteHistory.groupingBy { it }.eachCount()
-                val topEntry = counts.maxByOrNull { it.value }
+                // Majority letter in rolling window stabilizes brief 1-frame finger jitter
+                val topEntry = voteHistory.groupingBy { it }.eachCount().maxByOrNull { it.value }
+                val stableLetter = if (topEntry != null && topEntry.value >= 4) topEntry.key else classification.letter
+                displayLetter = stableLetter
 
-                val now = SystemClock.uptimeMillis()
-                if (topEntry != null && topEntry.value >= COMMIT_THRESHOLD && (now - lastCommitTime > COMMIT_COOLDOWN_MS)) {
-                    isCommitted = true
-                    lastCommitTime = now
-                    voteHistory.clear()
+                if (stableLetter != activeHoldLetter) {
+                    activeHoldLetter = stableLetter
+                    holdStartTimeMs = now
+                } else {
+                    val heldMs = now - holdStartTimeMs
+                    if (heldMs >= requiredHoldMs && (now - lastCommitTime >= cooldownMs)) {
+                        isCommitted = true
+                        lastCommitTime = now
+                        holdStartTimeMs = now
+                        voteHistory.clear()
+                        UiSoundManager.playSuccess(appContext)
+                    }
                 }
             }
 
             mainHandler.post {
-                onResult(classification.letter, classification.confidence, landmarks, isCommitted)
+                onResult(displayLetter, classification.confidence, smoothed, isCommitted)
             }
         } else {
-            mainHandler.post {
+            // Reset smoothing & hold timer if hand leaves camera for > 350ms
+            if (now - lastValidFrameTimeMs > 350L) {
+                smoothedCoords = null
                 voteHistory.clear()
+                activeHoldLetter = ""
+                holdStartTimeMs = 0L
+            }
+            mainHandler.post {
                 onResult("", 0.0f, null, false)
             }
         }

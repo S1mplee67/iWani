@@ -26,6 +26,7 @@ import com.projectnexus.iwani.emergency.EmergencyPhrase
 import com.projectnexus.iwani.emergency.EmergencySosManager
 import com.projectnexus.iwani.ui.components.TutorialSpotlightRegistry
 import com.projectnexus.iwani.ui.components.VoiceGlowBar
+import com.projectnexus.iwani.ui.components.autoSlideIfOverflow
 import com.projectnexus.iwani.ui.components.interactiveBounceClick
 import com.projectnexus.iwani.ui.components.tutorialSpotlightTarget
 import com.projectnexus.iwani.ui.theme.*
@@ -70,12 +71,18 @@ fun EmergencySosScreen(
                     text = "Emergency SOS",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
-                    color = EmergencyRed
+                    color = EmergencyRed,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.autoSlideIfOverflow()
                 )
                 Text(
                     text = if (isTagalog) "Pindutin ang sitwasyon para iparinig agad sa boses" else "Tap any situation for instant voice broadcast",
                     fontSize = 12.sp,
-                    color = textSec
+                    color = textSec,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.autoSlideIfOverflow()
                 )
             }
 
@@ -212,7 +219,10 @@ fun EmergencyPhraseCard(
                     text = title,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
-                    color = textPrim
+                    color = textPrim,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.autoSlideIfOverflow()
                 )
                 Text(
                     text = utterance,

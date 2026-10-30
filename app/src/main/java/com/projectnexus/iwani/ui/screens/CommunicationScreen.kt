@@ -28,8 +28,11 @@ import androidx.compose.ui.unit.sp
 import com.projectnexus.iwani.AppLanguage
 import com.projectnexus.iwani.emergency.EmergencySosManager
 import com.projectnexus.iwani.nlp.QwenFslTranslator
+import com.projectnexus.iwani.ui.components.TutorialSpotlightRegistry
 import com.projectnexus.iwani.ui.components.autoSlideIfOverflow
 import com.projectnexus.iwani.ui.components.interactiveBounceClick
+import com.projectnexus.iwani.ui.components.tutorialSpotlightTarget
+import com.projectnexus.iwani.ui.sound.UiSoundManager
 import com.projectnexus.iwani.ui.theme.*
 
 enum class GlossCategory {
@@ -156,12 +159,21 @@ fun CommunicationScreen(
         )
     }
 
+    val scrollState = rememberScrollState()
+    val activeTargetId = TutorialSpotlightRegistry.activeTargetId
+    LaunchedEffect(activeTargetId) {
+        when (activeTargetId) {
+            "translate_categories", "translate_quick_words", "translate_output_box" -> scrollState.animateScrollTo(0)
+            "translate_ai_card" -> scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(bg)
             .padding(horizontal = 20.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
     ) {
         Spacer(Modifier.height(14.dp))
 
@@ -169,7 +181,9 @@ fun CommunicationScreen(
             text = if (isTagalog) "Komunikasyon at Pagsasalin" else "Communication & Translation",
             fontSize = 24.sp,
             fontWeight = FontWeight.Black,
-            color = textPrimary
+            color = textPrimary,
+            maxLines = 1,
+            modifier = Modifier.autoSlideIfOverflow()
         )
         Text(
             text = if (isTagalog)
@@ -178,162 +192,181 @@ fun CommunicationScreen(
                 "Tap frequently used quick words or type below for natural speech",
             fontSize = 12.5.sp,
             color = textSecondary,
-            modifier = Modifier.padding(top = 3.dp, bottom = 12.dp)
+            maxLines = 1,
+            modifier = Modifier
+                .padding(top = 3.dp, bottom = 12.dp)
+                .autoSlideIfOverflow()
         )
 
         // ================= TOP CATEGORY BAR (WITH FREQUENTLY USED ON TOP) =================
-        Text(
-            text = if (isTagalog) "MGA KATEGORYA (MADALAS GAMITIN):" else "CATEGORIES (FREQUENTLY USED):",
-            fontSize = 10.5.sp,
-            fontWeight = FontWeight.ExtraBold,
-            letterSpacing = 1.1.sp,
-            color = accent
-        )
-        Spacer(Modifier.height(6.dp))
-
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .tutorialSpotlightTarget("translate_categories")
         ) {
-            CategoryChipItem(
-                label = if (isTagalog) "★ Madalas Gamitin" else "★ Frequently Used",
-                selected = selectedCategory == GlossCategory.FREQUENT,
-                activeColor = accent,
-                activeTextColor = Color(0xFF0F172A),
-                surface = surface,
-                textSecondary = textSecondary,
-                onClick = {
-                    selectedCategory = GlossCategory.FREQUENT
-                    inputText = "PAGKAIN"
-                }
+            Text(
+                text = if (isTagalog) "MGA KATEGORYA (MADALAS GAMITIN):" else "CATEGORIES (FREQUENTLY USED):",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.1.sp,
+                color = accent,
+                maxLines = 1,
+                modifier = Modifier.autoSlideIfOverflow()
             )
-            CategoryChipItem(
-                label = if (isTagalog) "Araw-araw" else "Daily Needs",
-                selected = selectedCategory == GlossCategory.DAILY,
-                activeColor = primary,
-                activeTextColor = Color.White,
-                surface = surface,
-                textSecondary = textSecondary,
-                onClick = {
-                    selectedCategory = GlossCategory.DAILY
-                    inputText = "GUSTO KAIN AKO"
-                }
-            )
-            CategoryChipItem(
-                label = if (isTagalog) "Pagbati" else "Greetings",
-                selected = selectedCategory == GlossCategory.GREETINGS,
-                activeColor = SuccessGreen,
-                activeTextColor = Color.White,
-                surface = surface,
-                textSecondary = textSecondary,
-                onClick = {
-                    selectedCategory = GlossCategory.GREETINGS
-                    inputText = "MAGANDANG UMAGA PO"
-                }
-            )
-            CategoryChipItem(
-                label = if (isTagalog) "Saklolo (SOS)" else "Emergency",
-                selected = selectedCategory == GlossCategory.EMERGENCY,
-                activeColor = EmergencyRed,
-                activeTextColor = Color.White,
-                surface = surface,
-                textSecondary = textSecondary,
-                onClick = {
-                    selectedCategory = GlossCategory.EMERGENCY
-                    inputText = "TULONG BINGI AKO"
-                }
-            )
-            CategoryChipItem(
-                label = if (isTagalog) "Kalusugan" else "Medical",
-                selected = selectedCategory == GlossCategory.MEDICAL,
-                activeColor = TealPrimary,
-                activeTextColor = Color.White,
-                surface = surface,
-                textSecondary = textSecondary,
-                onClick = {
-                    selectedCategory = GlossCategory.MEDICAL
-                    inputText = "MASAKIT ULO GAMOT"
-                }
-            )
-            CategoryChipItem(
-                label = if (isTagalog) "Paaralan (ICCT)" else "Campus & School",
-                selected = selectedCategory == GlossCategory.CAMPUS,
-                activeColor = Color(0xFF6366F1),
-                activeTextColor = Color.White,
-                surface = surface,
-                textSecondary = textSecondary,
-                onClick = {
-                    selectedCategory = GlossCategory.CAMPUS
-                    inputText = "GURO PROF TANONG"
-                }
-            )
-            CategoryChipItem(
-                label = if (isTagalog) "Biyahe" else "Commute",
-                selected = selectedCategory == GlossCategory.COMMUTE,
-                activeColor = Color(0xFFF97316),
-                activeTextColor = Color.White,
-                surface = surface,
-                textSecondary = textSecondary,
-                onClick = {
-                    selectedCategory = GlossCategory.COMMUTE
-                    inputText = "BAYAD PO PAMASAHE"
-                }
-            )
+            Spacer(Modifier.height(6.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                CategoryChipItem(
+                    label = if (isTagalog) "★ Madalas Gamitin" else "★ Frequently Used",
+                    selected = selectedCategory == GlossCategory.FREQUENT,
+                    activeColor = accent,
+                    activeTextColor = Color(0xFF0F172A),
+                    surface = surface,
+                    textSecondary = textSecondary,
+                    onClick = {
+                        selectedCategory = GlossCategory.FREQUENT
+                        inputText = "PAGKAIN"
+                    }
+                )
+                CategoryChipItem(
+                    label = if (isTagalog) "Araw-araw" else "Daily Needs",
+                    selected = selectedCategory == GlossCategory.DAILY,
+                    activeColor = primary,
+                    activeTextColor = Color.White,
+                    surface = surface,
+                    textSecondary = textSecondary,
+                    onClick = {
+                        selectedCategory = GlossCategory.DAILY
+                        inputText = "GUSTO KAIN AKO"
+                    }
+                )
+                CategoryChipItem(
+                    label = if (isTagalog) "Pagbati" else "Greetings",
+                    selected = selectedCategory == GlossCategory.GREETINGS,
+                    activeColor = SuccessGreen,
+                    activeTextColor = Color.White,
+                    surface = surface,
+                    textSecondary = textSecondary,
+                    onClick = {
+                        selectedCategory = GlossCategory.GREETINGS
+                        inputText = "MAGANDANG UMAGA PO"
+                    }
+                )
+                CategoryChipItem(
+                    label = if (isTagalog) "Saklolo (SOS)" else "Emergency",
+                    selected = selectedCategory == GlossCategory.EMERGENCY,
+                    activeColor = EmergencyRed,
+                    activeTextColor = Color.White,
+                    surface = surface,
+                    textSecondary = textSecondary,
+                    onClick = {
+                        selectedCategory = GlossCategory.EMERGENCY
+                        inputText = "TULONG BINGI AKO"
+                    }
+                )
+                CategoryChipItem(
+                    label = if (isTagalog) "Kalusugan" else "Medical",
+                    selected = selectedCategory == GlossCategory.MEDICAL,
+                    activeColor = TealPrimary,
+                    activeTextColor = Color.White,
+                    surface = surface,
+                    textSecondary = textSecondary,
+                    onClick = {
+                        selectedCategory = GlossCategory.MEDICAL
+                        inputText = "MASAKIT ULO GAMOT"
+                    }
+                )
+                CategoryChipItem(
+                    label = if (isTagalog) "Paaralan" else "School",
+                    selected = selectedCategory == GlossCategory.CAMPUS,
+                    activeColor = Color(0xFF6366F1),
+                    activeTextColor = Color.White,
+                    surface = surface,
+                    textSecondary = textSecondary,
+                    onClick = {
+                        selectedCategory = GlossCategory.CAMPUS
+                        inputText = "GURO PROF TANONG"
+                    }
+                )
+                CategoryChipItem(
+                    label = if (isTagalog) "Biyahe" else "Commute",
+                    selected = selectedCategory == GlossCategory.COMMUTE,
+                    activeColor = Color(0xFFF97316),
+                    activeTextColor = Color.White,
+                    surface = surface,
+                    textSecondary = textSecondary,
+                    onClick = {
+                        selectedCategory = GlossCategory.COMMUTE
+                        inputText = "BAYAD PO PAMASAHE"
+                    }
+                )
+            }
         }
 
         Spacer(Modifier.height(12.dp))
 
         // ================= MULTI-CHIP QUICK WORDS SECTION =================
-        Text(
-            text = if (isTagalog) "QUICK WORDS (PINDUTIN PARA ISALIN):" else "QUICK WORDS (TAP TO TRANSLATE):",
-            fontSize = 10.5.sp,
-            fontWeight = FontWeight.ExtraBold,
-            letterSpacing = 1.1.sp,
-            color = textSecondary
-        )
-        Spacer(Modifier.height(6.dp))
-
-        val currentWords = quickWordsByCategory[selectedCategory].orEmpty()
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .tutorialSpotlightTarget("translate_quick_words")
         ) {
-            currentWords.forEach { item ->
-                val isSelected = inputText.equals(item.glossKey, ignoreCase = true)
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isSelected) primary.copy(alpha = 0.22f) else surface,
-                    border = BorderStroke(
-                        width = if (isSelected) 1.5.dp else 1.dp,
-                        color = if (isSelected) primary else border
-                    ),
-                    modifier = Modifier.interactiveBounceClick {
-                        inputText = item.glossKey
+            Text(
+                text = if (isTagalog) "QUICK WORDS (PINDUTIN PARA ISALIN):" else "QUICK WORDS (TAP TO TRANSLATE):",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.1.sp,
+                color = textSecondary,
+                maxLines = 1,
+                modifier = Modifier.autoSlideIfOverflow()
+            )
+            Spacer(Modifier.height(6.dp))
+
+            val currentWords = quickWordsByCategory[selectedCategory].orEmpty()
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                currentWords.forEach { item ->
+                    val isSelected = inputText.equals(item.glossKey, ignoreCase = true)
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) primary.copy(alpha = 0.22f) else surface,
+                        border = BorderStroke(
+                            width = if (isSelected) 1.5.dp else 1.dp,
+                            color = if (isSelected) primary else border
+                        ),
+                        modifier = Modifier.interactiveBounceClick {
+                            inputText = item.glossKey
+                        }
+                    ) {
+                        Text(
+                            text = if (isTagalog) item.labelTl else item.labelEn,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                            color = if (isSelected) accent else textPrimary,
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        )
                     }
-                ) {
-                    Text(
-                        text = if (isTagalog) item.labelTl else item.labelEn,
-                        fontSize = 12.sp,
-                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
-                        color = if (isSelected) accent else textPrimary,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                    )
                 }
             }
         }
 
         Spacer(Modifier.height(14.dp))
 
-        // ================= OUTPUT BOX (FORMERLY "FSL Sign Gloss Senyas") =================
+        // ================= INPUT BOX =================
         OutlinedTextField(
             value = inputText,
             onValueChange = { inputText = it },
-            label = { Text("Output") },
+            label = { Text(if (isTagalog) "Mag-input dito" else "Input here") },
             placeholder = {
                 Text(
                     if (isTagalog)
@@ -344,17 +377,22 @@ fun CommunicationScreen(
             },
             trailingIcon = {
                 if (inputText.isNotEmpty()) {
-                    IconButton(onClick = { inputText = "" }) {
+                    IconButton(onClick = {
+                        UiSoundManager.playClick(context)
+                        inputText = ""
+                    }) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Clear Output",
+                            contentDescription = "Clear Input",
                             tint = textSecondary
                         )
                     }
                 }
             },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .tutorialSpotlightTarget("translate_output_box"),
             shape = RoundedCornerShape(14.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = surface,
@@ -376,6 +414,7 @@ fun CommunicationScreen(
             colors = CardDefaults.cardColors(containerColor = surface),
             modifier = Modifier
                 .fillMaxWidth()
+                .tutorialSpotlightTarget("translate_ai_card")
                 .border(1.dp, border, RoundedCornerShape(20.dp))
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -402,7 +441,8 @@ fun CommunicationScreen(
                             color = accent,
                             letterSpacing = 0.8.sp,
                             maxLines = 1,
-                            softWrap = false
+                            softWrap = false,
+                            modifier = Modifier.autoSlideIfOverflow()
                         )
                     }
 
@@ -445,6 +485,7 @@ fun CommunicationScreen(
                 ) {
                     Button(
                         onClick = {
+                            UiSoundManager.playClick(context)
                             val toSpeak = translatedText.ifBlank { inputText }
                             if (toSpeak.isNotBlank()) {
                                 sosManager.speak(toSpeak)
@@ -483,6 +524,7 @@ fun CommunicationScreen(
 
                     OutlinedButton(
                         onClick = {
+                            UiSoundManager.playClick(context)
                             val toCopy = translatedText.ifBlank { inputText }
                             if (toCopy.isNotBlank()) {
                                 clipboardManager.setText(AnnotatedString(toCopy))
@@ -539,9 +581,13 @@ private fun CategoryChipItem(
     textSecondary: Color,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
     FilterChip(
         selected = selected,
-        onClick = onClick,
+        onClick = {
+            UiSoundManager.playClick(context)
+            onClick()
+        },
         label = {
             Text(
                 text = label,

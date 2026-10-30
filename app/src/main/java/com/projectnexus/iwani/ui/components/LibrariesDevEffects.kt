@@ -33,9 +33,11 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -364,6 +366,414 @@ fun ThinkingOrb(
     }
 }
 
+private data class Atom3D(
+    val x: Float,
+    val y: Float,
+    val z: Float,
+    val radiusScale: Float,
+    val colorOffset: Float
+)
+
+/**
+ * 3D Rotating Ball-and-Stick Molecular Structure Icon (for MediaPipe FSL 3D):
+ * 5 well-spaced 3D atom spheres connected by long, clearly visible metallic sticks.
+ * Rotates smoothly to the right with exact 2*PI periodicity (zero loop flinch) and color-changing glossy balls.
+ */
+@Composable
+fun MolecularStructureOrb(
+    modifier: Modifier = Modifier,
+    size: Dp = 40.dp
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "MolecularStructureAnim")
+    val rotPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2800, easing = LinearEasing)
+        ),
+        label = "MolRotPhase"
+    )
+    val colorPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3600, easing = LinearEasing)
+        ),
+        label = "MolColorPhase"
+    )
+
+    // 5 widely spaced 3D atoms so the long connecting sticks in between are always clearly visible
+    val atoms = remember {
+        listOf(
+            Atom3D(0.0f, 0.04f, 0.0f, 1.05f, 0.0f),     // 0: Center Hub Atom
+            Atom3D(0.0f, -0.78f, 0.18f, 0.96f, 1.2f),   // 1: Top Atom
+            Atom3D(-0.76f, 0.44f, 0.42f, 0.98f, 2.4f),  // 2: Bottom-Left Front Atom
+            Atom3D(0.72f, 0.48f, -0.44f, 0.98f, 3.6f),  // 3: Bottom-Right Back Atom
+            Atom3D(0.68f, -0.30f, 0.54f, 0.92f, 4.8f)   // 4: Upper-Right Front Atom
+        )
+    }
+
+    val bonds = remember {
+        listOf(
+            0 to 1,
+            0 to 2,
+            0 to 3,
+            0 to 4,
+            1 to 4
+        )
+    }
+
+    val palette = remember {
+        listOf(
+            Color(0xFFEF4444), // Crimson Red
+            Color(0xFF0EA5E9), // Sky Cyan-Blue
+            Color(0xFF10B981), // Emerald Green
+            Color(0xFFF59E0B), // Amber Gold
+            Color(0xFFA855F7), // Vivid Violet
+            Color(0xFFF8FAFC)  // Pearl White
+        )
+    }
+
+    Canvas(modifier = modifier.size(size)) {
+        val cx = this.size.width * 0.5f
+        val cy = this.size.height * 0.52f
+        val scale = this.size.minDimension * 0.42f
+
+        // Smooth rightward 3D rotation with exact 1x harmonic tilt (f(0) == f(2*PI), zero loop flinch!)
+        val angleY = -rotPhase
+        val cosY = cos(angleY)
+        val sinY = sin(angleY)
+        val tiltX = 0.28f + 0.14f * sin(rotPhase)
+        val cosX = cos(tiltX)
+        val sinX = sin(tiltX)
+
+        // Project all 3D atoms
+        val projected = atoms.mapIndexed { idx, a ->
+            val x1 = a.x * cosY - a.z * sinY
+            val z1 = a.x * sinY + a.z * cosY
+            val y2 = a.y * cosX - z1 * sinX
+            val z2 = a.y * sinX + z1 * cosX
+            val persp = 1f / (1f - z2 * 0.22f)
+            val px = cx + x1 * scale * persp
+            val py = cy + y2 * scale * persp
+            Triple(idx, Offset(px, py), z2)
+        }
+
+        // 1. Draw Long 3D Cylindrical Sticks sorted back-to-front
+        val sortedBonds = bonds.sortedBy { (i, j) ->
+            (projected[i].third + projected[j].third) * 0.5f
+        }
+        val stickWidth = (this.size.minDimension * 0.062f).coerceAtLeast(2.2f)
+        for ((i, j) in sortedBonds) {
+            val p1 = projected[i].second
+            val p2 = projected[j].second
+            val avgZ = (projected[i].third + projected[j].third) * 0.5f
+            val depthAlpha = ((avgZ + 1f) * 0.5f).coerceIn(0.55f, 1f)
+
+            // Metallic grey cylinder base
+            drawLine(
+                color = Color(0xFF64748B).copy(alpha = depthAlpha),
+                start = p1,
+                end = p2,
+                strokeWidth = stickWidth,
+                cap = StrokeCap.Round
+            )
+            // Bright silver specular highlight down the middle of the stick
+            drawLine(
+                color = Color(0xFFE2E8F0).copy(alpha = depthAlpha * 0.9f),
+                start = p1,
+                end = p2,
+                strokeWidth = stickWidth * 0.38f,
+                cap = StrokeCap.Round
+            )
+        }
+
+        // 2. Draw 3D Glossy Color-Changing Atom Balls sorted back-to-front
+        val sortedAtoms = projected.sortedBy { it.third }
+        for ((idx, pos, z) in sortedAtoms) {
+            val atom = atoms[idx]
+            val depthScale = 0.84f + 0.24f * ((z + 1f) * 0.5f).coerceIn(0f, 1f)
+            val ballRadius = (this.size.minDimension * 0.082f) * atom.radiusScale * depthScale
+
+            // Smooth color transition across palette
+            val cPos = (colorPhase + atom.colorOffset) % palette.size
+            val cIdx1 = cPos.toInt() % palette.size
+            val cIdx2 = (cIdx1 + 1) % palette.size
+            val cFrac = cPos - cPos.toInt()
+            val baseColor = lerp(palette[cIdx1], palette[cIdx2], cFrac)
+            val darkEdge = lerp(baseColor, Color(0xFF090D16), 0.62f)
+            val highlightSpot = Offset(pos.x - ballRadius * 0.32f, pos.y - ballRadius * 0.32f)
+
+            // Subtle outer glow
+            drawCircle(
+                color = baseColor.copy(alpha = 0.20f),
+                radius = ballRadius * 1.22f,
+                center = pos
+            )
+            // 3D Shaded Sphere Body
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color.White,
+                        lerp(baseColor, Color.White, 0.35f),
+                        baseColor,
+                        darkEdge
+                    ),
+                    center = highlightSpot,
+                    radius = ballRadius * 1.35f
+                ),
+                radius = ballRadius,
+                center = pos
+            )
+            // Crisp glossy specular reflection dot
+            drawCircle(
+                color = Color.White.copy(alpha = 0.88f),
+                radius = ballRadius * 0.22f,
+                center = highlightSpot
+            )
+        }
+    }
+}
+
+private data class BrainNode3D(
+    val x: Float,
+    val y: Float,
+    val z: Float
+)
+
+/**
+ * 3D Rotating Cyber-Circuit Brain Icon with Moving Synaptic Lights (for Qwen2.5-0.5B):
+ * Preserves an unmistakable side-profile Brain silhouette (Frontal, Parietal dome, Occipital,
+ * Cerebellum & vertical Brainstem tracks) while rotating briskly to the right in 3D with
+ * bright synaptic light packets racing along crisp PCB circuit pathways.
+ */
+@Composable
+fun NeuralCircuitBrainOrb(
+    modifier: Modifier = Modifier,
+    size: Dp = 40.dp,
+    isExtracting: Boolean = false
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "NeuralCircuitBrainAnim")
+    val rotAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = if (isExtracting) 1400 else 2100, easing = LinearEasing)
+        ),
+        label = "BrainRotAngle"
+    )
+    val lightPulsePhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = if (isExtracting) 800 else 1250, easing = LinearEasing)
+        ),
+        label = "BrainLightPulse"
+    )
+
+    // Unmistakable Human Brain Side-Profile Outline (0..11) + Internal Circuit Hubs (12..16) + Brainstem (17..19)
+    val baseProfile = remember {
+        listOf(
+            // Outer Brain Cortex Silhouette (0..11)
+            Offset(-0.82f, 0.04f),  // 0: Frontal pole tip (left)
+            Offset(-0.76f, -0.32f), // 1: Frontal curve
+            Offset(-0.48f, -0.64f), // 2: Superior frontal gyrus
+            Offset(-0.08f, -0.78f), // 3: Parietal top crown
+            Offset(0.36f, -0.72f),  // 4: Parietal-occipital dome
+            Offset(0.72f, -0.44f),  // 5: Occipital upper lobe
+            Offset(0.84f, -0.06f),  // 6: Occipital back tip (right)
+            Offset(0.70f, 0.24f),   // 7: Cerebellum upper notch
+            Offset(0.46f, 0.44f),   // 8: Cerebellum lower bulge
+            Offset(0.14f, 0.34f),   // 9: Brainstem junction
+            Offset(-0.28f, 0.36f),  // 10: Temporal lobe bottom
+            Offset(-0.64f, 0.24f),  // 11: Orbital frontal base
+            // Clean Internal PCB Circuit Hubs (12..16)
+            Offset(-0.42f, -0.22f), // 12: Frontal PCB hub
+            Offset(-0.04f, -0.38f), // 13: Motor-parietal PCB hub
+            Offset(0.38f, -0.26f),  // 14: Occipital PCB hub
+            Offset(-0.18f, 0.04f),  // 15: Temporal PCB hub
+            Offset(0.28f, 0.08f),   // 16: Deep cerebellar hub
+            // Vertical Brainstem Data Bus Tracks (17..19)
+            Offset(-0.04f, 0.86f),  // 17: Brainstem bus Left
+            Offset(0.10f, 0.92f),   // 18: Brainstem bus Center
+            Offset(0.24f, 0.86f)    // 19: Brainstem bus Right
+        )
+    }
+
+    val cortexLoopIndices = remember {
+        listOf(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0)
+    }
+
+    val pcbTraces = remember {
+        listOf(
+            // Crisp PCB pathways from brainstem up through the cortex
+            17 to 15, 18 to 9, 19 to 16,
+            15 to 12, 12 to 1, 12 to 2,
+            15 to 13, 13 to 3, 13 to 4,
+            9 to 16, 16 to 14, 14 to 5, 14 to 6,
+            15 to 10, 12 to 0, 16 to 8
+        )
+    }
+
+    Canvas(modifier = modifier.size(size)) {
+        val cx = this.size.width * 0.5f
+        val cy = this.size.height * 0.48f
+        val rScale = this.size.minDimension * 0.44f
+
+        // Deep electric-blue neural aura behind the brain
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color(0xFF0284C7).copy(alpha = 0.36f),
+                    Color(0xFF1E3A8A).copy(alpha = 0.14f),
+                    Color.Transparent
+                ),
+                center = Offset(cx, cy),
+                radius = rScale * 1.22f
+            ),
+            radius = rScale * 1.22f,
+            center = Offset(cx, cy)
+        )
+
+        // Brisk rightward 3D rotation that preserves the recognizable brain profile at all angles
+        // Exact 1x integer harmonics so loop start and loop end match with 0 flinch
+        val yaw = -0.44f * sin(rotAngle)
+        val pitch = 0.16f * cos(rotAngle)
+        val cosY = cos(yaw)
+        val sinY = sin(yaw)
+        val cosX = cos(pitch)
+        val sinX = sin(pitch)
+
+        // Two 3D hemispheres shifting in depth as the brain rotates to the right
+        val hemiZOffset = 0.26f * cos(rotAngle)
+        val hemiXShift = 0.10f * sin(rotAngle)
+
+        fun projectPoint(pt: Offset, zBase: Float, xShift: Float): Pair<Offset, Float> {
+            val nx = pt.x + xShift
+            val x1 = nx * cosY - zBase * sinY
+            val z1 = nx * sinY + zBase * cosY
+            val y2 = pt.y * cosX - z1 * sinX
+            val z2 = pt.y * sinX + z1 * cosX
+            val persp = 1f / (1f - z2 * 0.24f)
+            return Pair(Offset(cx + x1 * rScale * persp, cy + y2 * rScale * persp), z2)
+        }
+
+        val backHemi = baseProfile.map { projectPoint(it, -hemiZOffset, -hemiXShift) }
+        val frontHemi = baseProfile.map { projectPoint(it, hemiZOffset, hemiXShift) }
+
+        // 1. Draw Back Hemisphere Brain Silhouette Outline (3D depth layer)
+        val backOutlinePath = Path().apply {
+            cortexLoopIndices.forEachIndexed { i, idx ->
+                val p = backHemi[idx].first
+                if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y)
+            }
+        }
+        drawPath(
+            path = backOutlinePath,
+            color = Color(0xFF0369A1).copy(alpha = 0.55f),
+            style = Stroke(width = (this.size.minDimension * 0.032f).coerceAtLeast(1.2f), cap = StrokeCap.Round)
+        )
+
+        // 2. Draw 3D Rotating Longitudinal Energy Ribbons sweeping to the right across the brain dome
+        for (band in 0 until 3) {
+            val bandPhase = (rotAngle / (2f * PI).toFloat() + band / 3f) % 1f
+            // Sweeps from left (-0.65) to right (+0.65) across the brain cortex
+            val bandX = -0.62f + bandPhase * 1.24f
+            val bandAlpha = sin(bandPhase * PI.toFloat()).coerceIn(0f, 1f)
+            val topY = -0.74f * sqrt((1f - (bandX * bandX) / 0.72f).coerceAtLeast(0.08f))
+            val botY = 0.30f
+            val pTop = projectPoint(Offset(bandX, topY), 0.18f * sin(bandPhase * PI.toFloat()), 0f).first
+            val pMid = projectPoint(Offset(bandX + 0.10f, (topY + botY) * 0.5f), 0.26f, 0f).first
+            val pBot = projectPoint(Offset(bandX, botY), 0.18f * sin(bandPhase * PI.toFloat()), 0f).first
+
+            val ribbonPath = Path().apply {
+                moveTo(pTop.x, pTop.y)
+                quadraticTo(pMid.x, pMid.y, pBot.x, pBot.y)
+            }
+            drawPath(
+                path = ribbonPath,
+                color = Color(0xFF38BDF8).copy(alpha = 0.45f * bandAlpha),
+                style = Stroke(width = (this.size.minDimension * 0.028f).coerceAtLeast(1.1f), cap = StrokeCap.Round)
+            )
+        }
+
+        // 3. Draw Crisp Front Hemisphere Brain Cortex Silhouette Outline
+        val frontOutlinePath = Path().apply {
+            cortexLoopIndices.forEachIndexed { i, idx ->
+                val p = frontHemi[idx].first
+                if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y)
+            }
+        }
+        drawPath(
+            path = frontOutlinePath,
+            color = Color(0xFF38BDF8).copy(alpha = 0.95f),
+            style = Stroke(width = (this.size.minDimension * 0.044f).coerceAtLeast(1.7f), cap = StrokeCap.Round)
+        )
+
+        // 4. Draw Internal PCB Circuit Traces + Fast Moving Synaptic Lights
+        val traceStroke = (this.size.minDimension * 0.030f).coerceAtLeast(1.2f)
+        pcbTraces.forEachIndexed { idx, (a, b) ->
+            val p1 = frontHemi[a].first
+            val p2 = frontHemi[b].first
+            val elbow = Offset(p1.x + (p2.x - p1.x) * 0.55f, p2.y)
+
+            drawLine(
+                color = Color(0xFF0EA5E9).copy(alpha = 0.82f),
+                start = p1,
+                end = elbow,
+                strokeWidth = traceStroke,
+                cap = StrokeCap.Round
+            )
+            drawLine(
+                color = Color(0xFF0EA5E9).copy(alpha = 0.82f),
+                start = elbow,
+                end = p2,
+                strokeWidth = traceStroke,
+                cap = StrokeCap.Round
+            )
+
+            // Moving Synaptic Light Pulse along the PCB trace
+            val t = (lightPulsePhase + (idx * 0.15f)) % 1f
+            val lightPos = if (t < 0.5f) {
+                val segT = t * 2f
+                Offset(p1.x + (elbow.x - p1.x) * segT, p1.y + (elbow.y - p1.y) * segT)
+            } else {
+                val segT = (t - 0.5f) * 2f
+                Offset(elbow.x + (p2.x - elbow.x) * segT, elbow.y + (p2.y - elbow.y) * segT)
+            }
+            val sparkR = (this.size.minDimension * 0.036f).coerceAtLeast(1.4f)
+            val glowColor = if (idx % 4 == 0) Color(0xFFFDE047) else Color(0xFF00FFFF)
+
+            drawCircle(
+                color = glowColor.copy(alpha = 0.55f),
+                radius = sparkR * 1.7f,
+                center = lightPos
+            )
+            drawCircle(
+                color = Color.White,
+                radius = sparkR * 0.68f,
+                center = lightPos
+            )
+        }
+
+        // 5. Crisp, compact PCB Solder-Pad Nodes (small enough that they never blur the brain silhouette)
+        val nodeR = (this.size.minDimension * 0.024f).coerceAtLeast(1.0f)
+        frontHemi.forEachIndexed { idx, (pos, _) ->
+            val pulse = 0.5f + 0.5f * sin((lightPulsePhase * 2f * PI + idx * 0.6f).toFloat())
+            drawCircle(
+                color = Color(0xFF38BDF8).copy(alpha = 0.45f + 0.4f * pulse),
+                radius = nodeR * 1.45f,
+                center = pos
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.85f),
+                radius = nodeR * 0.72f,
+                center = pos
+            )
+        }
+    }
+}
+
 /**
  * Libraries.dev `voice-glow` (`VoiceBeam`) implementation for Jetpack Compose:
  * An audio-reactive luminous wave glow along the bottom edge of voice/SOS elements.
@@ -448,7 +858,6 @@ fun MetalBadge(
     Box(
         modifier = modifier
             .then(clickModifier)
-            .wrapContentWidth(unbounded = false)
             .clip(shape)
             .background(
                 brush = Brush.linearGradient(
@@ -494,7 +903,8 @@ fun MetalBadge(
             letterSpacing = 1.0.sp,
             maxLines = 1,
             softWrap = false,
-            color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
+            color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
+            modifier = Modifier.autoSlideIfOverflow()
         )
     }
 }

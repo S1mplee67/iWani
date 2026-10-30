@@ -1,13 +1,16 @@
 package com.projectnexus.iwani.ui.screens
 
 import android.widget.Toast
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -15,26 +18,38 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.projectnexus.iwani.AppLanguage
 import com.projectnexus.iwani.R
+import com.projectnexus.iwani.ui.components.BorderBeamBox
+import com.projectnexus.iwani.ui.components.ChibiFaceAvatar
+import com.projectnexus.iwani.ui.components.autoSlideIfOverflow
+import com.projectnexus.iwani.ui.sound.UiSoundManager
 import com.projectnexus.iwani.ui.theme.*
+import kotlinx.coroutines.delay
 
 data class TeamMember(
     val name: String,
     val role: String,
     val initials: String,
-    val isLead: Boolean = false
+    val profileRes: Int,
+    val chibiRes: Int,
+    val isLead: Boolean = false,
+    val hasGoldGradient: Boolean = false
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,29 +68,119 @@ fun AboutScreen(
     val textSec = IWaniColors.textSecondary(isDarkTheme)
     val accent = IWaniColors.accent(isDarkTheme)
 
-    val teamMembers = listOf(
-        // 1. Leadership & Systems Architecture
-        TeamMember("Cueto, Lander John D.", "Project Manager", "LC", isLead = true),
-        TeamMember("Arteche, Justine Jay", "System Analyst", "JA"),
+    val teamMembers = remember {
+        listOf(
+            // All Gold Leads on Top: 1. Lander (Moving Gold Status Box) -> 2. Wency (Moving Gold Status Box) -> 3. Cunanan -> 4. Alon -> followed by regular members
+            TeamMember(
+                name = "Cueto, Lander John D.",
+                role = "Project Manager",
+                initials = "LC",
+                profileRes = R.drawable.profile_lander,
+                chibiRes = R.drawable.chibi_lander,
+                isLead = true,
+                hasGoldGradient = true
+            ),
+            TeamMember(
+                name = "Valmonte, Wency Miguel D.",
+                role = "Frontend & Backend Developer",
+                initials = "WV",
+                profileRes = R.drawable.profile_wency,
+                chibiRes = R.drawable.chibi_wency,
+                isLead = true,
+                hasGoldGradient = true
+            ),
+            TeamMember(
+                name = "Cunanan, Jhon Carlo A.",
+                role = "Lead Backend Developer",
+                initials = "JC",
+                profileRes = R.drawable.profile_cunanan,
+                chibiRes = R.drawable.chibi_cunanan,
+                isLead = true
+            ),
+            TeamMember(
+                name = "Alon, Angel Andreian L.",
+                role = "UI/UX Lead Designer",
+                initials = "AA",
+                profileRes = R.drawable.profile_alon,
+                chibiRes = R.drawable.chibi_alon,
+                isLead = true
+            ),
+            TeamMember(
+                name = "Arteche, Justine Jay",
+                role = "System Analyst",
+                initials = "JA",
+                profileRes = R.drawable.profile_arteche,
+                chibiRes = R.drawable.chibi_arteche
+            ),
+            TeamMember(
+                name = "Payla, Dyle Jhoven E.",
+                role = "Backend Developer",
+                initials = "DP",
+                profileRes = R.drawable.profile_payla,
+                chibiRes = R.drawable.chibi_payla
+            ),
+            TeamMember(
+                name = "Babagay, Mary Grace Ann N.",
+                role = "Database Administrator",
+                initials = "MB",
+                profileRes = R.drawable.profile_grace,
+                chibiRes = R.drawable.chibi_grace
+            ),
+            TeamMember(
+                name = "Escaner, Leon B.",
+                role = "DevOps & Deployment Specialist",
+                initials = "LE",
+                profileRes = R.drawable.profile_escaner,
+                chibiRes = R.drawable.chibi_escaner
+            ),
+            TeamMember(
+                name = "Cagadas, Kian R.",
+                role = "Quality Assurance",
+                initials = "KC",
+                profileRes = R.drawable.profile_kian,
+                chibiRes = R.drawable.chibi_kian
+            ),
+            TeamMember(
+                name = "Lomibao, Milbert A.",
+                role = "Technical Writer & UML Architect",
+                initials = "ML",
+                profileRes = R.drawable.profile_lomibao,
+                chibiRes = R.drawable.chibi_lomibao
+            ),
+            TeamMember(
+                name = "Lugay, Brandon Ashley P.",
+                role = "UAT Coordinator & Pitch Presenter",
+                initials = "BL",
+                profileRes = R.drawable.profile_lugay,
+                chibiRes = R.drawable.chibi_lugay
+            )
+        )
+    }
 
-        // 2. Design & Frontend
-        TeamMember("Alon, Angel Andreian L.", "UI/UX Lead Designer", "AA", isLead = true),
-        TeamMember("Tamarosa, Joycemay O.", "Frontend Developer", "JT"),
+    // Christmas-light sequential rotation:
+    // Real profile picture shown first for 3s -> rotates one-by-one from Lander (#1) to Wency (#2) to Cunanan (#3) -> ...
+    // to Chibi, holds 3s, then rotates in sequence back to Real Profile -> and back to Chibi again.
+    val showChibiByMember = remember { mutableStateListOf(*Array(teamMembers.size) { false }) }
+    var activeLitIndex by remember { mutableIntStateOf(-1) }
 
-        // 3. Backend & Database Engineering
-        TeamMember("Cunanan, Jhon Carlo A.", "Lead Backend Developer", "JC", isLead = true),
-        TeamMember("Valmonte, Wency Miguel D.", "Backend Developer", "WV"),
-        TeamMember("Payla, Dyle Jhoven E.", "Backend Developer", "DP"),
-        TeamMember("Babagay, Mary Grace Ann N.", "Database Administrator", "MB"),
-
-        // 4. DevOps & Quality Assurance
-        TeamMember("Escaner, Leon B.", "DevOps & Deployment Specialist", "LE"),
-        TeamMember("Cagadas, Kian R.", "Quality Assurance", "KC"),
-
-        // 5. Technical Documentation & Presentation
-        TeamMember("Lomibao, Milbert A.", "Technical Writer & UML Architect", "ML"),
-        TeamMember("Lugay, Brandon Ashley P.", "UAT Coordinator & Pitch Presenter", "BL")
-    )
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(3000L)
+            for (i in teamMembers.indices) {
+                activeLitIndex = i
+                showChibiByMember[i] = true
+                delay(230L)
+            }
+            activeLitIndex = -1
+            delay(3000L)
+            for (i in teamMembers.indices) {
+                activeLitIndex = i
+                showChibiByMember[i] = false
+                delay(230L)
+            }
+            activeLitIndex = -1
+        }
+    }
 
     Scaffold(
         containerColor = bg,
@@ -270,52 +375,165 @@ fun AboutScreen(
                 )
             }
 
-            // Team Members List
-            items(teamMembers) { member ->
-                Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = cardSurface),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, if (member.isLead) accent.copy(alpha = 0.45f) else cardBorder, RoundedCornerShape(14.dp))
-                        .clickable {
-                            Toast.makeText(context, "${member.name} • ${member.role}", Toast.LENGTH_SHORT).show()
-                        }
-                ) {
+            // Team Members List with Christmas-Light Profile <-> Chibi 3D Rotation
+            itemsIndexed(teamMembers) { index, member ->
+                val isShowingChibi = showChibiByMember.getOrElse(index) { false }
+                val isLit = activeLitIndex == index
+                val flipRotationY by animateFloatAsState(
+                    targetValue = if (isShowingChibi) 180f else 0f,
+                    animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+                    label = "avatarFlip_$index"
+                )
+                val avatarBg = if (isDarkTheme) Color(0xFF0B1326) else Color(0xFFE0F2FE)
+                val avatarBorderColor = when {
+                    isLit -> accent
+                    member.isLead -> accent.copy(alpha = 0.85f)
+                    else -> Color(0xFF38BDF8).copy(alpha = 0.7f)
+                }
+
+                val goldTextBrush = Brush.linearGradient(
+                    colors = if (isDarkTheme) {
+                        listOf(Color(0xFFFEF08A), Color(0xFFFBBF24), Color(0xFFF59E0B))
+                    } else {
+                        listOf(Color(0xFFB45309), Color(0xFFD97706), Color(0xFF92400E))
+                    }
+                )
+
+                val rowContent: @Composable () -> Unit = {
                     Row(
                         modifier = Modifier.padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(42.dp)
-                                .background(if (member.isLead) accent.copy(alpha = 0.2f) else if (isDarkTheme) IcctBlue.copy(alpha = 0.2f) else TealPrimary.copy(alpha = 0.12f), CircleShape),
+                                .size(48.dp)
+                                .graphicsLayer {
+                                    rotationY = flipRotationY
+                                    cameraDistance = 12f * density
+                                },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = member.initials,
-                                color = if (member.isLead) accent else if (isDarkTheme) Color(0xFF93C5FD) else TealPrimary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
+                            if (flipRotationY <= 90f) {
+                                // Real centered face-only portrait (background removed, same circular backdrop)
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(avatarBg, CircleShape)
+                                        .border(if (isLit) 2.dp else 1.4.dp, avatarBorderColor, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = member.profileRes),
+                                        contentDescription = "${member.name} Profile",
+                                        contentScale = ContentScale.Crop,
+                                        alignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(CircleShape)
+                                    )
+                                }
+                            } else {
+                                // Flipped back side: Chibi in matching ICCT uniform (un-mirrored via rotationY = 180f)
+                                Box(
+                                    modifier = Modifier.graphicsLayer { rotationY = 180f },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    ChibiFaceAvatar(
+                                        drawableRes = member.chibiRes,
+                                        contentDescription = "${member.name} Chibi",
+                                        size = 48.dp,
+                                        shape = CircleShape,
+                                        backgroundColor = avatarBg,
+                                        borderColor = avatarBorderColor,
+                                        zoomScale = 2.15f
+                                    )
+                                }
+                            }
                         }
 
                         Spacer(Modifier.width(14.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = member.name,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                color = textPrim
-                            )
+                            if (member.hasGoldGradient) {
+                                Text(
+                                    text = member.name,
+                                    style = TextStyle(
+                                        brush = goldTextBrush,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 15.sp
+                                    ),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.autoSlideIfOverflow()
+                                )
+                            } else {
+                                Text(
+                                    text = member.name,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.5.sp,
+                                    color = textPrim,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.autoSlideIfOverflow()
+                                )
+                            }
                             Text(
                                 text = member.role,
                                 fontSize = 12.sp,
                                 color = if (member.isLead) accent else textSec,
-                                fontWeight = if (member.isLead) FontWeight.SemiBold else FontWeight.Normal
+                                fontWeight = if (member.isLead) FontWeight.SemiBold else FontWeight.Normal,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.autoSlideIfOverflow()
                             )
                         }
+                    }
+                }
+
+                if (member.hasGoldGradient) {
+                    // Moving Gold BorderBeam + Interior Lighting Box (just like FSL Camera button, in Gold status)
+                    BorderBeamBox(
+                        active = true,
+                        cornerRadius = 14.dp,
+                        borderWidth = if (isLit) 2.2.dp else 1.8.dp,
+                        beamColor = Color(0xFFF59E0B),
+                        secondaryColor = Color(0xFFFEF08A),
+                        baseBorderColor = accent.copy(alpha = 0.55f),
+                        backgroundColor = cardSurface,
+                        durationMillis = if (index == 0) 3400 else 3800,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                UiSoundManager.playClick(context)
+                                showChibiByMember[index] = !showChibiByMember[index]
+                                Toast.makeText(context, "${member.name} • ${member.role}", Toast.LENGTH_SHORT).show()
+                            }
+                    ) {
+                        rowContent()
+                    }
+                } else {
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = cardSurface),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(
+                                width = if (isLit) 1.5.dp else 1.dp,
+                                color = when {
+                                    isLit -> accent
+                                    member.isLead -> accent.copy(alpha = 0.45f)
+                                    else -> cardBorder
+                                },
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .clickable {
+                                UiSoundManager.playClick(context)
+                                showChibiByMember[index] = !showChibiByMember[index]
+                                Toast.makeText(context, "${member.name} • ${member.role}", Toast.LENGTH_SHORT).show()
+                            }
+                    ) {
+                        rowContent()
                     }
                 }
             }
